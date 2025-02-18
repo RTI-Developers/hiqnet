@@ -1,0 +1,30 @@
+<#@ output extension=".xml" #>
+<#@ include file="Variables.t4" #>
+<?xml version="1.0" encoding="utf-8" ?>
+<variables>
+<#
+for (var i = 1; i <= deviceCount; i++)
+{
+	string paddedIndex = i.ToString().PadLeft(2, '0');
+    string sourceId = "Device" + i.ToString();
+#>
+    <category name="%%DeviceName<#= i #>%% - Status" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #>">
+        <variable type="boolean" name="Connected" sysvar="Connected<#= i #>" />
+    </category>
+    <category name="%%DeviceName<#= i #>%% - Parameters" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #>">
+<#
+    for (var j = 1; j <= parameterCount; j++)
+    {
+        string paddedDeviceIndex = j.ToString().PadLeft(2, '0');
+#>
+        <variable name="%%ParameterName<#= i #>_<#= j #>%% Bool Value" sysvar="ParameterBoolValue<#= i #>_<#= j #>" type="boolean" condition="$DeviceParameterCount<#= i #> >= <#= j #> and $ParameterEnableSubscribe<#= i #>_<#= j #> and $ParameterVariableType<#= i #>_<#= j #> == 1" />
+        <variable name="%%ParameterName<#= i #>_<#= j #>%% Integer Value" sysvar="ParameterIntValue<#= i #>_<#= j #>" type="integer" condition="$DeviceParameterCount<#= i #> >= <#= j #> and $ParameterEnableSubscribe<#= i #>_<#= j #> and $ParameterVariableType<#= i #>_<#= j #> == 2" />
+        <variable name="%%ParameterName<#= i #>_<#= j #>%% String Value" sysvar="ParameterStringValue<#= i #>_<#= j #>" type="string" condition="$DeviceParameterCount<#= i #> >= <#= j #> and $ParameterEnableSubscribe<#= i #>_<#= j #> and $ParameterVariableType<#= i #>_<#= j #> == 3" />
+<#
+    }
+#>
+    </category>
+<#
+}
+#>
+</variables>

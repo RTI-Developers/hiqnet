@@ -1,0 +1,29 @@
+<#@ output extension=".xml" #>
+<#@ include file="Variables.t4" #>
+<?xml version="1.0" encoding="utf-8" ?>
+<functions>
+<#
+for (var i = 1; i <= deviceCount; i++)
+{
+  string paddedIndex = i.ToString().PadLeft(2, '0');
+  string sourceId = "Device" + i.ToString();
+#>
+  <category name="%%DeviceName<#= i #>%%" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #>">
+<#
+  for (var j = 1; j <= parameterCount; j++)
+  {
+      string paddedDeviceIndex = j.ToString().PadLeft(2, '0');
+#>
+    <function name="Set %%ParameterName<#= i #>_<#= j #>%% Value" export="setParameter:<#= i #>_<#= j #>" repeatrate="0" condition="$DeviceParameterCount<#= i #> >= <#= j #>">
+      <parameter name="DeviceIndex" type="integer" default="<#= i #>" hidden="true"/>
+      <parameter name="ParameterIndex" type="integer" default="<#= j #>" hidden="true"/>
+      <parameter name="Value (Hex)" type="string" />
+    </function>
+<#
+  }
+#>
+  </category>
+<#
+}
+#>
+</functions>

@@ -1,0 +1,4 @@
+{
+    "ttProcessor.TTPath": "t4",
+    "terminal.integrated.cwd": "${workspaceFolder}"
+}

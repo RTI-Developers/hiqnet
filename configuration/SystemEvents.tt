@@ -1,0 +1,20 @@
+<#@ output extension=".xml" #>
+<#@ include file="Variables.t4" #>
+<?xml version="1.0" encoding="utf-8"?>
+<events>
+<#
+for (var i = 1; i <= deviceCount; i++)
+{
+    string paddedIndex = i.ToString().PadLeft(2, '0');
+    string sourceId = "Device" + i.ToString();
+#>
+	<category name="%%DeviceName<#= i #>%%" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #>">
+		<event name="Connected" tag="Connected<#= i #>" />
+		<event name="Disconnected" tag="Disconnected<#= i #>" />
+		<event name="Initialized" tag="Initialized<#= i #>" />
+		<event name="Connection Failed" tag="ConnectionFailed<#= i #>" />
+	</category>
+<#
+}
+#>
+</events>

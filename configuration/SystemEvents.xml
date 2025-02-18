@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<events>
+	<category name="%%DeviceName1%%" sourceid="Device1" condition="$TotalDeviceCount >= 1">
+		<event name="Connected" tag="Connected1" />
+		<event name="Disconnected" tag="Disconnected1" />
+		<event name="Initialized" tag="Initialized1" />
+		<event name="Connection Failed" tag="ConnectionFailed1" />
+	</category>
+	<category name="%%DeviceName2%%" sourceid="Device2" condition="$TotalDeviceCount >= 2">
+		<event name="Connected" tag="Connected2" />
+		<event name="Disconnected" tag="Disconnected2" />
+		<event name="Initialized" tag="Initialized2" />
+		<event name="Connection Failed" tag="ConnectionFailed2" />
+	</category>
+	<category name="%%DeviceName3%%" sourceid="Device3" condition="$TotalDeviceCount >= 3">
+		<event name="Connected" tag="Connected3" />
+		<event name="Disconnected" tag="Disconnected3" />
+		<event name="Initialized" tag="Initialized3" />
+		<event name="Connection Failed" tag="ConnectionFailed3" />
+	</category>
+	<category name="%%DeviceName4%%" sourceid="Device4" condition="$TotalDeviceCount >= 4">
+		<event name="Connected" tag="Connected4" />
+		<event name="Disconnected" tag="Disconnected4" />
+		<event name="Initialized" tag="Initialized4" />
+		<event name="Connection Failed" tag="ConnectionFailed4" />
+	</category>
+	<category name="%%DeviceName5%%" sourceid="Device5" condition="$TotalDeviceCount >= 5">
+		<event name="Connected" tag="Connected5" />
+		<event name="Disconnected" tag="Disconnected5" />
+		<event name="Initialized" tag="Initialized5" />
+		<event name="Connection Failed" tag="ConnectionFailed5" />
+	</category>
+	<category name="%%DeviceName6%%" sourceid="Device6" condition="$TotalDeviceCount >= 6">
+		<event name="Connected" tag="Connected6" />
+		<event name="Disconnected" tag="Disconnected6" />
+		<event name="Initialized" tag="Initialized6" />
+		<event name="Connection Failed" tag="ConnectionFailed6" />
+	</category>
+	<category name="%%DeviceName7%%" sourceid="Device7" condition="$TotalDeviceCount >= 7">
+		<event name="Connected" tag="Connected7" />
+		<event name="Disconnected" tag="Disconnected7" />
+		<event name="Initialized" tag="Initialized7" />
+		<event name="Connection Failed" tag="ConnectionFailed7" />
+	</category>
+	<category name="%%DeviceName8%%" sourceid="Device8" condition="$TotalDeviceCount >= 8">
+		<event name="Connected" tag="Connected8" />
+		<event name="Disconnected" tag="Disconnected8" />
+		<event name="Initialized" tag="Initialized8" />
+		<event name="Connection Failed" tag="ConnectionFailed8" />
+	</category>
+	<category name="%%DeviceName9%%" sourceid="Device9" condition="$TotalDeviceCount >= 9">
+		<event name="Connected" tag="Connected9" />
+		<event name="Disconnected" tag="Disconnected9" />
+		<event name="Initialized" tag="Initialized9" />
+		<event name="Connection Failed" tag="ConnectionFailed9" />
+	</category>
+	<category name="%%DeviceName10%%" sourceid="Device10" condition="$TotalDeviceCount >= 10">
+		<event name="Connected" tag="Connected10" />
+		<event name="Disconnected" tag="Disconnected10" />
+		<event name="Initialized" tag="Initialized10" />
+		<event name="Connection Failed" tag="ConnectionFailed10" />
+	</category>
+	<category name="%%DeviceName11%%" sourceid="Device11" condition="$TotalDeviceCount >= 11">
+		<event name="Connected" tag="Connected11" />
+		<event name="Disconnected" tag="Disconnected11" />
+		<event name="Initialized" tag="Initialized11" />
+		<event name="Connection Failed" tag="ConnectionFailed11" />
+	</category>
+	<category name="%%DeviceName12%%" sourceid="Device12" condition="$TotalDeviceCount >= 12">
+		<event name="Connected" tag="Connected12" />
+		<event name="Disconnected" tag="Disconnected12" />
+		<event name="Initialized" tag="Initialized12" />
+		<event name="Connection Failed" tag="ConnectionFailed12" />
+	</category>
+	<category name="%%DeviceName13%%" sourceid="Device13" condition="$TotalDeviceCount >= 13">
+		<event name="Connected" tag="Connected13" />
+		<event name="Disconnected" tag="Disconnected13" />
+		<event name="Initialized" tag="Initialized13" />
+		<event name="Connection Failed" tag="ConnectionFailed13" />
+	</category>
+	<category name="%%DeviceName14%%" sourceid="Device14" condition="$TotalDeviceCount >= 14">
+		<event name="Connected" tag="Connected14" />
+		<event name="Disconnected" tag="Disconnected14" />
+		<event name="Initialized" tag="Initialized14" />
+		<event name="Connection Failed" tag="ConnectionFailed14" />
+	</category>
+	<category name="%%DeviceName15%%" sourceid="Device15" condition="$TotalDeviceCount >= 15">
+		<event name="Connected" tag="Connected15" />
+		<event name="Disconnected" tag="Disconnected15" />
+		<event name="Initialized" tag="Initialized15" />
+		<event name="Connection Failed" tag="ConnectionFailed15" />
+	</category>
+	<category name="%%DeviceName16%%" sourceid="Device16" condition="$TotalDeviceCount >= 16">
+		<event name="Connected" tag="Connected16" />
+		<event name="Disconnected" tag="Disconnected16" />
+		<event name="Initialized" tag="Initialized16" />
+		<event name="Connection Failed" tag="ConnectionFailed16" />
+	</category>
+</events>

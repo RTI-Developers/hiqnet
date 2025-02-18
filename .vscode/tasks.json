@@ -1,0 +1,71 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558 
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "FileCopy - Driver",
+            "type": "shell",
+			"group": "build",
+            "command": "npm run fileCopy",
+			"options": {
+				"cwd": "./" 
+			},
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"panel": "shared",
+			}
+        },
+        {
+            "label": "Install Dependencies - All",
+			"group": "build",
+			"dependsOn": [
+				"Install Dependencies - dotnet-t4",
+				"Install Dependencies - npm"
+			]
+        },
+        {
+            "label": "Install Dependencies - dotnet-t4",
+            "type": "shell",
+            "command": "dotnet tool install --global dotnet-t4 --version 3.0.0",
+        },
+        {
+            "label": "Install Dependencies - npm",
+            "type": "shell",
+            "command": "npm install"
+        },
+        {
+            "label": "Typescript Build",
+            "type": "typescript",
+            "tsconfig": "tsconfig.json",
+            "problemMatcher": [
+                "$tsc"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "Package Driver",
+            "type": "shell",
+            "command": "..\\tools\\PackageDriver.exe",
+            "options": {
+                "cwd": ".\\dist"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Typescript Build",
+                "Uglify Javascript",
+				"FileCopy - Driver"
+            ]
+        },
+        {
+            "label": "Uglify Javascript",
+            "type": "shell",
+            "command": "npm run uglify",
+        }
+    ]
+}

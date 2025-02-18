@@ -1,0 +1,74 @@
+<#@ output extension=".xml" #>
+<#@ include file="Variables.t4" #>
+<?xml version="1.0" encoding="utf-8" ?>
+<configuration>
+    <category name="Global" hidden="true">
+        <setting type="integer" name="Total Device Count" variable="TotalDeviceCount" countsourceid="Device" />
+    </category>
+    <category name="Advanced" advanced="true">
+        <setting type="string" name="Protocol Version" variable="ProtocolVersion" default="02" />
+        <setting type="string" name="Source Address" variable="SourceAddress" default="00,33,00,00,00,00" />
+        <setting type="string" name="Hop Count" variable="HopCount" default="05" />
+    </category>
+<#
+for (var i = 1; i <= deviceCount; i++)
+{
+	string paddedIndex = i.ToString().PadLeft(2, '0');
+    string sourceId = "Device" + i.ToString();
+#>
+    <category name="Device <#= paddedIndex #> - Connectivity" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #>">
+        <setting type="string" name="Name" variable="DeviceName<#= i #>" default="Crown Amp" description="A friendly name for the device" />
+        <setting type="string" name="IP / Hostname" variable="DeviceAddress<#= i #>" default="1.1.1.1" description="The host name or IP address of the device" />
+        <setting type="string" name="HiQNet Device Address" variable="HiQNetDeviceAddress<#= i #>" default="00,01" description="The HiQNet address of the device (in hex) [From Audio Architect]" />
+        <setting type="string" name="HiQNet Virtual Device Address" variable="HiQNetVirtualDeviceAddress<#= i #>" default="00" description="The HiQNet address of the virtual device (in hex) [From Audio Architect]" />
+        <setting type="mcinteger" name="Parameter Count" variable="DeviceParameterCount<#= i #>" default="1" description="The number of device parameters to control / monitor">
+<#
+for (int k = 1; k <= parameterCount; k++)
+{
+#>
+            <choice name="<#= k #>" value="<#= k #>"></choice>
+<#
+}
+#>
+        </setting>
+    </category>
+<#
+for (var j = 1; j <= parameterCount; j++)
+{
+    string paddedParameterIndex = j.ToString().PadLeft(2, '0');
+#>
+    <category name="Device <#= paddedIndex #> - Parameter <#= paddedParameterIndex #>" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #> and $DeviceParameterCount<#= i #> >= <#= j #>">
+        <setting type="string" name="Name" variable="ParameterName<#= i #>_<#= j #>" default="Mute Enabled" description="A friendly name for the parameter" />
+        <setting type="string" name="HiQNet Object Address" variable="HiQNetObjectAddress<#= i #>_<#= j #>" default="10,17,03" description="The HiQNet address of the object (in hex) [From Audio Architect]" />
+        <setting type="string" name="Id" variable="ParameterId<#= i #>_<#= j #>" default="00,07" description="Parameter ID (in hex) [From Audio Architect]" />
+        <setting type="boolean" name="Allow Set" variable="ParameterAllowSet<#= i #>_<#= j #>" description="Allow setting parameter" />
+        <setting type="mcinteger" name="Set Method" variable="ParameterSetMethod<#= i #>_<#= j #>" description="Parameter set method" condition="$ParameterAllowSet<#= i #>_<#= j #>">
+            <choice name="Set" value="1" />
+            <choice name="Set %" value="2" />
+        </setting>
+        <setting type="mcstring" name="Data Type" variable="ParameterDataType<#= i #>_<#= j #>" default="00" description="Data Type (in hex) [From Audio Architect]" condition="$ParameterAllowSet<#= i #>_<#= j #> and $ParameterSetMethod<#= i #>_<#= j #> == 1">
+            <choice name="All" value="00" />
+            <choice name="Non-Sensor" value="01" />
+            <choice name="Sensor" value="02" />
+        </setting>
+        <setting type="boolean" name="Enable Subscribe" variable="ParameterEnableSubscribe<#= i #>_<#= j #>" default="true" description="Subscribe to parameter value" />
+        <setting type="mcstring" name="Subscription Type" variable="ParameterSubscriptionType<#= i #>_<#= j #>" default="00" description="Parameter subscription type (in hex) [From Audio Architect]" condition="$ParameterEnableSubscribe<#= i #>_<#= j #>">
+            <choice name="All" value="00" />
+            <choice name="Non-Sensor" value="01" />
+            <choice name="Sensor" value="02" />
+        </setting>
+        <setting type="string" name="Sensor Rate" variable="ParameterSensorRate<#= i #>_<#= j #>" default="00,00" description="Sensor Rate (ms in hex) [From Audio Architect]" />
+        <setting type="mcinteger" name="Variable Type" variable="ParameterVariableType<#= i #>_<#= j #>" default="2" description="Resultant variable type" condition="$ParameterEnableSubscribe<#= i #>_<#= j #>">
+            <choice name="Boolean" value="1" />
+            <choice name="Integer" value="2" />
+            <choice name="String" value="3" />
+        </setting>
+    </category>
+<#
+}
+}
+#>
+	<category name="Debug Settings" description="Driver debug options" hidden="true">
+		<setting type="boolean" name="Enable Trace" variable="DebugTrace" description="Enable verbose debug output" />
+	</category>
+</configuration>

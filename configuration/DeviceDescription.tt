@@ -1,0 +1,11 @@
+<#@ output extension=".xml" #>
+<#@ include file="Variables.t4" #>
+<?xml version='1.0' encoding='utf-8'?>
+<device>
+  <sources>
+    <source maxitems="<#= deviceCount #>" sourceid="Device" name="HiQNet Device">
+      <templates>
+      </templates>
+    </source>
+  </sources>
+</device>
