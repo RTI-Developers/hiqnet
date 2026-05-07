@@ -7,7 +7,7 @@
 		copyright="Copyright 2023 Noesis Labs"
 		deviceManufacturer="Harman"
 		deviceModel="HiQNet Compatible"
-		driverVersion="1.0"
+		driverVersion="1.1"
 		minimumRuntimeVersion="20"		
 		minimumSoftwareVersion="9.9"
 		minimumApexVersion="10.0"
