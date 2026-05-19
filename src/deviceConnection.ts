@@ -1,98 +1,108 @@
 class DeviceConnection
 {
+    private static readonly CONNECT_FAILURE_TIMEOUT_MS: number = 15000;
+
+    private readonly _ipAddress: string;
+    private readonly _port: number;
     private readonly _tcp: TCP;
-    private readonly _timeoutTimer: Timer;
+    private readonly _failureTimer: Timer;
     private readonly _logger: Logger;
     private readonly _loggerContext: string;
-    private readonly _onTimeout: (handle: number) => void;
+    private readonly _onFailureTick: (handle: number) => void;
     private readonly _onConnectionStateChanged: (state: ConnectionState) => void;
 
     public TcpHandle: number;
-    public TimoutTimerHandle: number;
+    public FailureTimerHandle: number;
     public State: ConnectionState;
 
     constructor(
         ipAddress: string,
+        port: number,
         onCommRx: (data: string, handle: number) => void,
         onConnect: (handle: number) => void,
         onDisconnect: (handle: number) => void,
-        onTimeout: (handle: number) => void,
+        onFailureTick: (handle: number) => void,
         onConnectionStateChanged: (state: ConnectionState) => void,
         logger: Logger
     ) {
-        
         this._logger = logger;
-        this._loggerContext = 'DeviceConnection (' + ipAddress + ')';
-
-        logger.logTrace('constructor', this._loggerContext);
+        this._loggerContext = 'DeviceConnection (' + ipAddress + ':' + port + ')';
+        this._ipAddress = ipAddress;
+        this._port = port;
+        this._onFailureTick = onFailureTick;
+        this._onConnectionStateChanged = onConnectionStateChanged;
 
         this._tcp = new TCP(onCommRx);
         this._tcp.UseHandleInCallbacks = true;
         this._tcp.OnConnectFunc = onConnect;
         this._tcp.OnDisconnectFunc = onDisconnect;
 
-        this._timeoutTimer = new Timer();
-        this._timeoutTimer.UseHandleInCallbacks = true;
-
-        this._onTimeout = onTimeout;
-        this._onConnectionStateChanged = onConnectionStateChanged;
+        this._failureTimer = new Timer();
+        this._failureTimer.UseHandleInCallbacks = true;
 
         this.State = ConnectionState.Disconnected;
         this.TcpHandle = this._tcp.Handle;
-        this.TimoutTimerHandle = this._timeoutTimer.Handle;
-
-        logger.logTrace('Opening TCP Connection to: [' + ipAddress + ':3804]', this._loggerContext);
-        this._tcp.Open(ipAddress, 3804);
-        this._tcp.SetTxInterMsgDelay(100);
-        this._timeoutTimer.Start(onTimeout, 5000);
+        this.FailureTimerHandle = this._failureTimer.Handle;
     }
 
-    onConnect() {
-        this._logger.logTrace('onConnect', this._loggerContext);
+    // Caller must register TcpHandle / FailureTimerHandle before invoking this so the
+    // handle-bearing RTI callbacks can resolve via the routing map.
+    public start() {
+        this._logger.logInfo('Opening TCP connection to ' + this._ipAddress + ':' + this._port, this._loggerContext);
+        this._tcp.Open(this._ipAddress, this._port);
+        this._tcp.SetTxInterMsgDelay(50);
+        this.armFailureTimer();
+    }
+
+    public onConnect() {
+        if (this._logger.IsTraceEnabled) this._logger.logTrace('onConnect', this._loggerContext);
+        this._failureTimer.Stop();
         this.setState(ConnectionState.Connected);
-
-        if (this._timeoutTimer.State == 1) { 
-            this._timeoutTimer.Stop();
-        }
     }
 
-    onDisconnect() {
-        this._logger.logTrace('onDisconnect', this._loggerContext);
+    public onDisconnect() {
+        // RTI's TCP object auto-reconnects after a drop unless Close() has been called.
+        // We rearm the failure timer so the UI sees Failed if recovery takes too long.
+        if (this._logger.IsTraceEnabled) this._logger.logTrace('onDisconnect', this._loggerContext);
+        const wasConnected = this.State == ConnectionState.Connected;
         this.setState(ConnectionState.Disconnected);
-        this._logger.logTrace('Disconnected', this._loggerContext);
-        
-        if (this._timeoutTimer.State != 1) {
-            this._timeoutTimer.Start(this._onTimeout, 5000);
+        if (wasConnected) {
+            this.armFailureTimer();
         }
     }
 
-    onTimeout() {
-        this._logger.logTrace('onTimeout', this._loggerContext);
-        this._logger.logTrace('TCP connection timed out', this._loggerContext);
-        this.setState(ConnectionState.Failed);
-        this._timeoutTimer.Start(this._onTimeout, 5000);
+    public onFailureTick() {
+        if (this.State != ConnectionState.Connected) {
+            this._logger.logInfo('No TCP connection established within timeout; marking Failed', this._loggerContext);
+            this.setState(ConnectionState.Failed);
+        }
     }
 
-    sendRawCommand(command: string) {
-        this._logger.logTrace('sendRawCommand (' + command + ')', this._loggerContext);
-
-        this._tcp.Write(command);
+    public sendRawCommand(command: string): boolean {
+        if (this.State != ConnectionState.Connected) {
+            this._logger.logInfo('sendRawCommand called while not connected; dropping', this._loggerContext);
+            return false;
+        }
+        return this._tcp.Write(command);
     }
-    
+
+    public shutdown() {
+        // Close() stops RTI's auto-reconnect loop.
+        this._failureTimer.Stop();
+        try { this._tcp.Close(); } catch (e) { /* swallow */ }
+    }
+
+    private armFailureTimer() {
+        this._failureTimer.Stop();
+        this._failureTimer.Start(this._onFailureTick, DeviceConnection.CONNECT_FAILURE_TIMEOUT_MS);
+    }
+
     private setState(state: ConnectionState) {
-        this._logger.logTrace('setState, state: [' + ConnectionState[state] + ']', this._loggerContext);
-
-        if (this.State == ConnectionState.Failed && state == ConnectionState.Disconnected) { 
-            // Failed state overrides Disconnected state
-            this._logger.logTrace('Current connection state is failed, ignoring disconnected.', this._loggerContext);
-            return;
-        }
-
-        if (state !== this.State) {
-            this._logger.logTrace('Changing state to: [' + state + ']', this._loggerContext);
-
-            this.State = state;
-            this._onConnectionStateChanged(state);
-        }
+        if (state == this.State) return;
+        // Failed is sticky: only a real Connected event clears it.
+        if (this.State == ConnectionState.Failed && state == ConnectionState.Disconnected) return;
+        if (this._logger.IsTraceEnabled) this._logger.logTrace('State -> ' + ConnectionState[state], this._loggerContext);
+        this.State = state;
+        this._onConnectionStateChanged(state);
     }
 }

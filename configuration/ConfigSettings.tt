@@ -6,9 +6,10 @@
         <setting type="integer" name="Total Device Count" variable="TotalDeviceCount" countsourceid="Device" />
     </category>
     <category name="Advanced" advanced="true">
-        <setting type="string" name="Protocol Version" variable="ProtocolVersion" default="02" />
-        <setting type="string" name="Source Address" variable="SourceAddress" default="00,33,00,00,00,00" />
-        <setting type="string" name="Hop Count" variable="HopCount" default="05" />
+        <setting type="string" name="Protocol Version" variable="ProtocolVersion" default="02" description="HiQNet protocol version (hex); 02 for modern devices, 01 only for dbx ZonePro" />
+        <setting type="string" name="Source Address" variable="SourceAddress" default="00,33,00,00,00,00" description="HiQNet source address of this controller (6 bytes in hex)" />
+        <setting type="string" name="Hop Count" variable="HopCount" default="05" description="Hop count (hex); default 05" />
+        <setting type="integer" name="Polling Interval (Seconds)" variable="PollingIntervalSeconds" default="8" description="Keep-alive interval in seconds (must be less than the device's KAP, default 10)" />
     </category>
 <#
 for (var i = 1; i <= deviceCount; i++)
@@ -43,22 +44,29 @@ for (var j = 1; j <= parameterCount; j++)
         <setting type="string" name="Id" variable="ParameterId<#= i #>_<#= j #>" default="00,07" description="Parameter ID (in hex) [From Audio Architect]" />
         <setting type="boolean" name="Allow Set" variable="ParameterAllowSet<#= i #>_<#= j #>" description="Allow setting parameter" />
         <setting type="mcinteger" name="Set Method" variable="ParameterSetMethod<#= i #>_<#= j #>" description="Parameter set method" condition="$ParameterAllowSet<#= i #>_<#= j #>">
-            <choice name="Set" value="1" />
-            <choice name="Set %" value="2" />
+            <choice name="Set (typed)" value="1" />
+            <choice name="Set % (1.15 fixed point)" value="2" />
         </setting>
-        <setting type="mcstring" name="Data Type" variable="ParameterDataType<#= i #>_<#= j #>" default="00" description="Data Type (in hex) [From Audio Architect]" condition="$ParameterAllowSet<#= i #>_<#= j #> and $ParameterSetMethod<#= i #>_<#= j #> == 1">
-            <choice name="All" value="00" />
+        <setting type="mcstring" name="Data Type" variable="ParameterDataType<#= i #>_<#= j #>" default="00" description="HiQNet wire data type (used when Set Method = Set)" condition="$ParameterAllowSet<#= i #>_<#= j #> and $ParameterSetMethod<#= i #>_<#= j #> == 1">
+            <choice name="BYTE (signed 8-bit)" value="00" />
+            <choice name="UBYTE (unsigned 8-bit)" value="01" />
+            <choice name="WORD (signed 16-bit)" value="02" />
+            <choice name="UWORD (unsigned 16-bit)" value="03" />
+            <choice name="LONG (signed 32-bit)" value="04" />
+            <choice name="ULONG (unsigned 32-bit)" value="05" />
+            <choice name="FLOAT32" value="06" />
+            <choice name="FLOAT64" value="07" />
+            <choice name="LONG64" value="0A" />
+            <choice name="ULONG64" value="0B" />
+        </setting>
+        <setting type="boolean" name="Enable Subscribe" variable="ParameterEnableSubscribe<#= i #>_<#= j #>" default="true" description="Subscribe to parameter value updates" />
+        <setting type="mcstring" name="Subscription Type" variable="ParameterSubscriptionType<#= i #>_<#= j #>" default="00" description="Per-spec set to 00; vendor extensions may use Non-Sensor / Sensor" condition="$ParameterEnableSubscribe<#= i #>_<#= j #>">
+            <choice name="All (spec default)" value="00" />
             <choice name="Non-Sensor" value="01" />
             <choice name="Sensor" value="02" />
         </setting>
-        <setting type="boolean" name="Enable Subscribe" variable="ParameterEnableSubscribe<#= i #>_<#= j #>" default="true" description="Subscribe to parameter value" />
-        <setting type="mcstring" name="Subscription Type" variable="ParameterSubscriptionType<#= i #>_<#= j #>" default="00" description="Parameter subscription type (in hex) [From Audio Architect]" condition="$ParameterEnableSubscribe<#= i #>_<#= j #>">
-            <choice name="All" value="00" />
-            <choice name="Non-Sensor" value="01" />
-            <choice name="Sensor" value="02" />
-        </setting>
-        <setting type="string" name="Sensor Rate" variable="ParameterSensorRate<#= i #>_<#= j #>" default="00,00" description="Sensor Rate (ms in hex) [From Audio Architect]" />
-        <setting type="mcinteger" name="Variable Type" variable="ParameterVariableType<#= i #>_<#= j #>" default="2" description="Resultant variable type" condition="$ParameterEnableSubscribe<#= i #>_<#= j #>">
+        <setting type="string" name="Sensor Rate" variable="ParameterSensorRate<#= i #>_<#= j #>" default="00,00" description="Sensor update period in ms (2 byte hex, UWORD); 00,00 for non-sensor params" />
+        <setting type="mcinteger" name="Variable Type" variable="ParameterVariableType<#= i #>_<#= j #>" default="2" description="System variable type to mirror this parameter into" condition="$ParameterEnableSubscribe<#= i #>_<#= j #>">
             <choice name="Boolean" value="1" />
             <choice name="Integer" value="2" />
             <choice name="String" value="3" />

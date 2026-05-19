@@ -2,6 +2,8 @@
 <device>
   <sources>
     <source maxitems="16" sourceid="Device" name="HiQNet Device">
+      <templates>
+      </templates>
     </source>
   </sources>
 </device>

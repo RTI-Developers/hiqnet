@@ -45,6 +45,15 @@
             "group": "build"
         },
         {
+            "label": "Render T4 Templates",
+            "type": "shell",
+            "command": "t4 ConfigSettings.tt -o ConfigSettings.xml && t4 DeviceDescription.tt -o DeviceDescription.xml && t4 SystemEvents.tt -o SystemEvents.xml && t4 SystemFunctions.tt -o SystemFunctions.xml && t4 SystemVariables.tt -o SystemVariables.xml",
+            "options": {
+                "cwd": ".\\configuration"
+            },
+            "group": "build"
+        },
+        {
             "label": "Package Driver",
             "type": "shell",
             "command": "..\\tools\\PackageDriver.exe",
@@ -57,6 +66,7 @@
             },
             "dependsOrder": "sequence",
             "dependsOn": [
+                "Render T4 Templates",
                 "Typescript Build",
                 "Uglify Javascript",
 				"FileCopy - Driver"

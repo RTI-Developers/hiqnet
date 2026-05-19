@@ -11,11 +11,11 @@ enum MessageType {
 }
 
 class Logger {
-	private readonly _enableTrace: boolean;
 	private readonly _prefix: string;
+	public readonly IsTraceEnabled: boolean;
 
 	constructor(prefix: string, enableTrace: boolean) {
-		this._enableTrace = enableTrace;
+		this.IsTraceEnabled = enableTrace;
 		this._prefix = prefix;
 	}
 
@@ -28,11 +28,14 @@ class Logger {
 	}
 
 	logTrace(message: string, context?: string) {
+		if (!this.IsTraceEnabled && System.LogLevel < MessageType.Trace) {
+			return;
+		}
 		this.logInternal(MessageType.Trace, message, context);
 	}
 
 	private logInternal(messageType: MessageType, message: string, context: string = '') {
-		if (this._enableTrace) {
+		if (this.IsTraceEnabled) {
 			let traceMessage = this._prefix + ' [' + MessageType[messageType] + '] ';
 
 			if (context) {
