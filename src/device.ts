@@ -29,7 +29,7 @@ class Device {
 
 	private setConnectedValue(value: boolean) { SystemVars.Write('Connected' + this._index, value); }
 	private setBooleanParameterValue(parameterIndex: number, value: boolean) { SystemVars.Write('ParameterBoolValue' + this._index + '_' + parameterIndex, value || false); }
-	private setIntegerParameterValue(parameterIndex: number, value: number) { SystemVars.Write('ParameterIntegerValue' + this._index + '_' + parameterIndex, value || -999); }
+	private setIntegerParameterValue(parameterIndex: number, value: number) { SystemVars.Write('ParameterIntValue' + this._index + '_' + parameterIndex, value || -999); }
 	private setStringParameterValue(parameterIndex: number, value: string) { SystemVars.Write('ParameterStringValue' + this._index + '_' + parameterIndex, value || ''); }
 	
 	private sendHelloQueryMessage() {

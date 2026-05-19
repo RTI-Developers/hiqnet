@@ -45,7 +45,6 @@ for (let i = 1; i <= g_totalDeviceCount; i++) {
             DeviceConnectionOnConnect,
             DeviceConnectionOnDisconnect,
             DeviceConnectionOnTimeout,
-            DeviceConnectionOnReconnect,
             (state: ConnectionState) => { device.OnConnectionStateChanged(state); },
             g_logger
         ),
@@ -57,7 +56,6 @@ for (let i = 1; i <= g_totalDeviceCount; i++) {
 	g_devicesGlobalHandlerMap.register(device.PollingTimerHandle, device);
     g_devicesGlobalHandlerMap.register(device.Connection.TcpHandle, device);
 	g_devicesGlobalHandlerMap.register(device.Connection.TimoutTimerHandle, device);
-    g_devicesGlobalHandlerMap.register(device.Connection.ReconnectTimerHandle, device);
 
     g_devices[i] = device;
 }
@@ -110,18 +108,6 @@ function DeviceConnectionOnTimeout(handle: number) {
     }
 
     Device.Connection.onTimeout();
-}
-
-function DeviceConnectionOnReconnect(handle: number) {
-    g_logger.logTrace('DeviceConnectionOnReconnect');
-
-    const Device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
-    if (!Device) {
-        g_logger.logError('DeviceConnectionOnReconnect: Error retrieving device from handle: ' + handle);
-        return;
-    }
-
-    Device.Connection.onReconnect();
 }
 
 //#endregion
