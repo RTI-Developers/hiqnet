@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <device>
   <sources>
-    <source maxitems="16" sourceid="Device" name="HiQNet Device">
+    <source maxitems="16" sourceid="Device" name="HiQnet Device">
     </source>
   </sources>
 </device>

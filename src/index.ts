@@ -11,9 +11,9 @@ function parseObjectAddress(addr: string): string {
 }
 
 const g_debug = Config.Get('DebugTrace') == 'true';
-const g_logger = new Logger('HiQNet Driver', g_debug);
+const g_logger = new Logger('HiQnet Driver', g_debug);
 
-g_logger.logInfo('Initializing HiQNet Driver');
+g_logger.logInfo('Initializing HiQnet Driver');
 
 const g_totalDeviceCount = parseInt(Config.Get('TotalDeviceCount'));
 const g_pollingIntervalSecondsRaw = parseInt(Config.Get('PollingIntervalSeconds'));
@@ -44,7 +44,7 @@ for (let i = 1; i <= g_totalDeviceCount; i++) {
             IsSetAllowed: Config.Get('ParameterAllowSet' + i + '_' + j) == 'true',
             IsSubscribeEnabled: Config.Get('ParameterEnableSubscribe' + i + '_' + j) == 'true',
             Name: Config.Get('ParameterName' + i + '_' + j),
-            ObjectAddress: parseObjectAddress(Config.Get('HiQNetObjectAddress' + i + '_' + j)),
+            ObjectAddress: parseObjectAddress(Config.Get('HiQnetObjectAddress' + i + '_' + j)),
             SetMethod: setMethodRaw == 2 ? 'Set %' : 'Set',
             VariableType: variableType
         };

@@ -6,8 +6,8 @@
         <setting type="integer" name="Total Device Count" variable="TotalDeviceCount" countsourceid="Device" />
     </category>
     <category name="Advanced" advanced="true">
-        <setting type="string" name="Protocol Version" variable="ProtocolVersion" default="02" description="HiQNet protocol version (hex); 02 for modern devices, 01 only for dbx ZonePro" />
-        <setting type="integer" name="Source Node Address" variable="SourceAddress" default="52" description="HiQNet node address for this driver (1-65534; must be unique — do not reuse Audio Architect's HiQNet Address)" />
+        <setting type="string" name="Protocol Version" variable="ProtocolVersion" default="02" description="HiQnet protocol version (hex); 02 for modern devices, 01 only for dbx ZonePro" />
+        <setting type="integer" name="Source Node Address" variable="SourceAddress" default="52" description="HiQnet node address for this driver (1-65534; must be unique — do not reuse Audio Architect's HiQnet Address)" />
         <setting type="integer" name="Polling Interval (Seconds)" variable="PollingIntervalSeconds" default="8" description="Keep-alive send interval in seconds (must be less than the device KAP of 10s)" />
     </category>
 <#
@@ -19,8 +19,8 @@ for (var i = 1; i <= deviceCount; i++)
     <category name="Device <#= paddedIndex #> - Connectivity" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #>">
         <setting type="string" name="Name" variable="DeviceName<#= i #>" default="Crown Amp" description="A friendly name for the device" />
         <setting type="string" name="IP / Hostname" variable="DeviceAddress<#= i #>" default="1.1.1.1" description="The host name or IP address of the device" />
-        <setting type="integer" name="HiQNet Address" variable="HiQNetDeviceAddress<#= i #>" default="1" description="HiQNet Address of the device as shown in Audio Architect" />
-        <setting type="integer" name="HiQNet Virtual Device" variable="HiQNetVirtualDeviceAddress<#= i #>" default="0" description="Virtual device number as shown in Audio Architect (typically 0)" />
+        <setting type="integer" name="HiQnet Address" variable="HiQnetDeviceAddress<#= i #>" default="1" description="HiQnet Address of the device as shown in Audio Architect" />
+        <setting type="integer" name="HiQnet Virtual Device" variable="HiQnetVirtualDeviceAddress<#= i #>" default="0" description="Virtual device number as shown in Audio Architect (typically 0)" />
         <setting type="mcinteger" name="Parameter Count" variable="DeviceParameterCount<#= i #>" default="1" description="The number of device parameters to control / monitor">
 <#
 for (int k = 1; k <= parameterCount; k++)
@@ -39,14 +39,14 @@ for (var j = 1; j <= parameterCount; j++)
 #>
     <category name="Device <#= paddedIndex #> - Parameter <#= paddedParameterIndex #>" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #> and $DeviceParameterCount<#= i #> >= <#= j #>">
         <setting type="string" name="Name" variable="ParameterName<#= i #>_<#= j #>" default="Mute Enabled" description="A friendly name for the parameter" />
-        <setting type="string" name="Object Address" variable="HiQNetObjectAddress<#= i #>_<#= j #>" default="15.22.7" description="Object address as shown in Audio Architect (three dot-separated decimals, e.g. 15.22.7)" />
+        <setting type="string" name="Object Address" variable="HiQnetObjectAddress<#= i #>_<#= j #>" default="15.22.7" description="Object address as shown in Audio Architect (three dot-separated decimals, e.g. 15.22.7)" />
         <setting type="integer" name="Parameter ID" variable="ParameterId<#= i #>_<#= j #>" default="6" description="Parameter ID as shown in Audio Architect" />
         <setting type="boolean" name="Allow Set" variable="ParameterAllowSet<#= i #>_<#= j #>" description="Allow setting parameter" />
         <setting type="mcinteger" name="Set Method" variable="ParameterSetMethod<#= i #>_<#= j #>" description="Parameter set method" condition="$ParameterAllowSet<#= i #>_<#= j #>">
             <choice name="Set (typed)" value="1" />
             <choice name="Set % (1.15 fixed point)" value="2" />
         </setting>
-        <setting type="mcstring" name="Data Type" variable="ParameterDataType<#= i #>_<#= j #>" default="00" description="HiQNet wire data type (used when Set Method = Set)" condition="$ParameterAllowSet<#= i #>_<#= j #> and $ParameterSetMethod<#= i #>_<#= j #> == 1">
+        <setting type="mcstring" name="Data Type" variable="ParameterDataType<#= i #>_<#= j #>" default="00" description="HiQnet wire data type (used when Set Method = Set)" condition="$ParameterAllowSet<#= i #>_<#= j #> and $ParameterSetMethod<#= i #>_<#= j #> == 1">
             <choice name="BYTE (signed 8-bit)" value="00" />
             <choice name="UBYTE (unsigned 8-bit)" value="01" />
             <choice name="WORD (signed 16-bit)" value="02" />

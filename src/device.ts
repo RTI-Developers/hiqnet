@@ -5,9 +5,9 @@ class Device {
 	private static readonly HOP_COUNT_HEX: string = '05';
 	private static readonly MSGID_DISCO_INFO: string = '0000';
 	private static readonly MSGID_GOODBYE: string = '0007';
-	private static readonly MSGID_PARAM_SET: string = '0100';
-	private static readonly MSGID_PARAM_SET_PERCENT: string = '0102';
-	private static readonly MSGID_PARAM_GET: string = '0103';
+	private static readonly MSGID_MULTI_PARAM_SET: string = '0100';
+	private static readonly MSGID_MULTI_PARAM_SET_PERCENT: string = '0102';
+	private static readonly MSGID_MULTI_PARAM_GET: string = '0103';
 	private static readonly MSGID_MULTI_PARAM_SUBSCRIBE: string = '010f';
 
 	private readonly _index: number;
@@ -43,15 +43,15 @@ class Device {
 		this.Connection = connection;
 		this._parameters = parameters;
 		this._logger = logger;
-		this._loggerContext = 'HiQNet Device (' + name + ')';
+		this._loggerContext = 'HiQnet Device (' + name + ')';
 
 		this._protocolVersionHex = Config.Get('ProtocolVersion').cleanHex();
 		// Addresses are stored as Audio Architect decimal integers; convert to hex for wire use.
 		const sourceNode = parseInt(Config.Get('SourceAddress'), 10).toString(16).padLeft(4);
 		this._sourceAddressHex = sourceNode + '00000000';
 
-		const deviceAddr = parseInt(Config.Get('HiQNetDeviceAddress' + index), 10).toString(16).padLeft(4);
-		const vdAddr = parseInt(Config.Get('HiQNetVirtualDeviceAddress' + index), 10).toString(16).padLeft(2);
+		const deviceAddr = parseInt(Config.Get('HiQnetDeviceAddress' + index), 10).toString(16).padLeft(4);
+		const vdAddr = parseInt(Config.Get('HiQnetVirtualDeviceAddress' + index), 10).toString(16).padLeft(2);
 		this._deviceAddressOnlyHex = deviceAddr;
 		this._deviceAddressPrefixHex = deviceAddr + vdAddr;
 
@@ -188,9 +188,9 @@ class Device {
 		}
 
 		if (parameter.SetMethod == 'Set %') {
-			this.sendParamSetPercent(parameter, hexValue);
+			this.sendMultiParamSetPercent(parameter, hexValue);
 		} else {
-			this.sendParamSet(parameter, hexValue);
+			this.sendMultiParamSet(parameter, hexValue);
 		}
 
 		// Echo locally so the UI reflects the change immediately.
@@ -352,7 +352,7 @@ class Device {
 			const p = this._parameters[i];
 			if (!p || !p.IsSubscribeEnabled) continue;
 			this.sendMultiParamSubscribe(p);
-			this.sendParamGet(p);
+			this.sendMultiParamGet(p);
 			count++;
 		}
 		this._logger.logInfo('Sent MultiParamSubscribe + MultiParamGet for ' + count + ' parameter(s).', this._loggerContext);
@@ -380,7 +380,7 @@ class Device {
 		this.transmit(header + payload);
 	}
 
-	private sendParamGet(parameter: Parameter) {
+	private sendMultiParamGet(parameter: Parameter) {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
 		let payload = '0001';      // PARAMETER COUNT: 1
 		payload += parameter.Id;   // PARAMETER ID
@@ -392,11 +392,11 @@ class Device {
 				this._loggerContext
 			);
 		}
-		const header = this.buildHeader(Device.MSGID_PARAM_GET, dest, payload.length / 2, Device.FLAG_GUARANTEED);
+		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_GET, dest, payload.length / 2, Device.FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
-	private sendParamSet(parameter: Parameter, hexValue: string) {
+	private sendMultiParamSet(parameter: Parameter, hexValue: string) {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
 		if (this._logger.IsTraceEnabled) {
 			this._logger.logTrace(
@@ -411,11 +411,11 @@ class Device {
 		payload += parameter.Id;                        // Param_ID UWORD
 		payload += parameter.DataType;                  // DataType UBYTE
 		payload += hexValue;                            // Value
-		const header = this.buildHeader(Device.MSGID_PARAM_SET, dest, payload.length / 2, Device.FLAG_GUARANTEED);
+		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SET, dest, payload.length / 2, Device.FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
-	private sendParamSetPercent(parameter: Parameter, hexValueUword: string) {
+	private sendMultiParamSetPercent(parameter: Parameter, hexValueUword: string) {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
 		const value = hexValueUword.length == 4 ? hexValueUword : hexValueUword.padLeft(4);
 		if (this._logger.IsTraceEnabled) {
@@ -430,7 +430,7 @@ class Device {
 		let payload = '0001';                           // NumPARAM UWORD
 		payload += parameter.Id;                        // PARAM_ID UWORD
 		payload += value;                               // PARAM_Value UWORD (1.15 fixed-point)
-		const header = this.buildHeader(Device.MSGID_PARAM_SET_PERCENT, dest, payload.length / 2, Device.FLAG_GUARANTEED);
+		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SET_PERCENT, dest, payload.length / 2, Device.FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
