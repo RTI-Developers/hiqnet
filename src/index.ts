@@ -1,4 +1,15 @@
 
+// Converts Audio Architect dot-notation object address (e.g. "15.22.7") to 6-char hex ("0f1607").
+function parseObjectAddress(addr: string): string {
+    const parts = addr.split('.');
+    if (parts.length !== 3) return '000000';
+    let hex = '';
+    for (let i = 0; i < 3; i++) {
+        hex += parseInt(parts[i], 10).toString(16).padLeft(2);
+    }
+    return hex;
+}
+
 const g_debug = Config.Get('DebugTrace') == 'true';
 const g_logger = new Logger('HiQNet Driver', g_debug);
 
@@ -28,15 +39,13 @@ for (let i = 1; i <= g_totalDeviceCount; i++) {
         const setMethodRaw = parseInt(Config.Get('ParameterSetMethod' + i + '_' + j));
         parameters[j] = {
             DataType: Config.Get('ParameterDataType' + i + '_' + j).cleanHex(),
-            Id: Config.Get('ParameterId' + i + '_' + j).cleanHex(),
+            Id: parseInt(Config.Get('ParameterId' + i + '_' + j), 10).toString(16).padLeft(4),
             Index: j,
             IsSetAllowed: Config.Get('ParameterAllowSet' + i + '_' + j) == 'true',
             IsSubscribeEnabled: Config.Get('ParameterEnableSubscribe' + i + '_' + j) == 'true',
             Name: Config.Get('ParameterName' + i + '_' + j),
-            ObjectAddress: Config.Get('HiQNetObjectAddress' + i + '_' + j).cleanHex(),
-            SensorRate: Config.Get('ParameterSensorRate' + i + '_' + j).cleanHex(),
+            ObjectAddress: parseObjectAddress(Config.Get('HiQNetObjectAddress' + i + '_' + j)),
             SetMethod: setMethodRaw == 2 ? 'Set %' : 'Set',
-            SubscriptionType: Config.Get('ParameterSubscriptionType' + i + '_' + j).cleanHex(),
             VariableType: variableType
         };
     }
