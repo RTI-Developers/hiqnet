@@ -2,13 +2,12 @@ class Device {
 	private static readonly STD_HEADER_LEN: number = 25;
 	private static readonly FLAG_INFORMATION: number = 0x0004;
 	private static readonly FLAG_GUARANTEED: number = 0x0020;
-	private static readonly FLAG_SESSION: number = 0x0100;
 	private static readonly MSGID_DISCO_INFO: string = '0000';
 	private static readonly MSGID_GOODBYE: string = '0007';
-	private static readonly MSGID_HELLO: string = '0008';
 	private static readonly MSGID_PARAM_SET: string = '0100';
 	private static readonly MSGID_PARAM_SET_PERCENT: string = '0102';
-	private static readonly MSGID_MULTI_PARAM_SUBSCRIBE: string = '010F';
+	private static readonly MSGID_PARAM_GET: string = '0103';
+	private static readonly MSGID_MULTI_PARAM_SUBSCRIBE: string = '010f';
 
 	private readonly _index: number;
 	private readonly _logger: Logger;
@@ -19,15 +18,13 @@ class Device {
 	private readonly _protocolVersionHex: string;
 	private readonly _hopCountHex: string;
 	private readonly _sourceAddressHex: string;          // 12 hex chars (6 bytes)
-	private readonly _sourceAddressPrefixHex: string;    // 6 hex chars (Source Device + VD)
 	private readonly _deviceAddressPrefixHex: string;    // 6 hex chars (Remote Device + VD)
 	private readonly _deviceAddressOnlyHex: string;      // 4 hex chars (Remote Device, for Goodbye payload)
 
 	private _latestConnectionState: ConnectionState | undefined = undefined;
-	private _localSessionNumber: number = 0;
-	private _remoteSessionNumber: number = 0;
-	private _sequenceNumber: number = 1;
 	private _rxBufferHex: string = '';
+	private _subscriptionsSent: boolean = false;
+	private _controllerIpHex: string = '00000000';
 
 	public readonly Connection: DeviceConnection;
 	public Name: string;
@@ -51,13 +48,16 @@ class Device {
 
 		this._protocolVersionHex = Config.Get('ProtocolVersion').cleanHex();
 		this._hopCountHex = Config.Get('HopCount').cleanHex();
-		this._sourceAddressHex = Config.Get('SourceAddress').cleanHex();
-		this._sourceAddressPrefixHex = this._sourceAddressHex.substring(0, 6);
+		// Strip VD-OBJECT: a controller node has no virtual devices; address = NODE + 0x00000000.
+		const configAddr = Config.Get('SourceAddress').cleanHex();
+		this._sourceAddressHex = configAddr.substring(0, 4) + '00000000';
 
 		const deviceAddr = Config.Get('HiQNetDeviceAddress' + index).cleanHex();
 		const vdAddr = Config.Get('HiQNetVirtualDeviceAddress' + index).cleanHex();
 		this._deviceAddressOnlyHex = deviceAddr;
 		this._deviceAddressPrefixHex = (deviceAddr + vdAddr);
+
+		this.refreshControllerIp();
 
 		this.initSystemVars();
 
@@ -66,26 +66,57 @@ class Device {
 		this._pollingEvent.Disable();
 		this.PollingEventHandle = this._pollingEvent.Handle;
 
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'Constructed:'
+				+ ' srcAddr=' + this._sourceAddressHex.toUpperCase()
+				+ ' devicePrefix=' + this._deviceAddressPrefixHex.toUpperCase()
+				+ ' controllerIp=' + this.hexToIpString(this._controllerIpHex)
+				+ ' protocolVer=0x' + this._protocolVersionHex.toUpperCase()
+				+ ' hopCount=0x' + this._hopCountHex.toUpperCase()
+				+ ' pollIntervalSec=' + pollingIntervalSec
+				+ ' parameterCount=' + parameters.length,
+				this._loggerContext
+			);
+		}
+
 		System.SignalEvent('Initialized' + index);
 	}
 
 	public OnCommRx(data: string) {
-		// Append new bytes to RX buffer and drain any complete messages.
-		this._rxBufferHex += data.toHexByteArray().join('');
+		const incoming = data.toHexByteArray().join('');
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'RX raw ' + (incoming.length / 2) + ' byte(s): ' + incoming.toUpperCase(),
+				this._loggerContext
+			);
+		}
+
+		this._rxBufferHex += incoming;
 
 		while (this._rxBufferHex.length >= 12) {
-			// Need at least 6 bytes to read message length.
+			// Need at least 6 bytes to read message length field (bytes 2-5).
 			const messageSize = hexToUnsignedInt(this._rxBufferHex.substring(4, 12));
 			if (!messageSize || messageSize < Device.STD_HEADER_LEN) {
-				// Malformed; discard buffer to recover.
-				this._logger.logError('Invalid message size (' + messageSize + ') — flushing RX buffer', this._loggerContext);
+				this._logger.logError(
+					'Invalid message size (' + messageSize + ') in RX buffer -- flushing.'
+					+ ' Buffer head: ' + this._rxBufferHex.substring(0, 20).toUpperCase(),
+					this._loggerContext
+				);
 				this._rxBufferHex = '';
 				return;
 			}
 
 			const messageHexLen = messageSize * 2;
 			if (this._rxBufferHex.length < messageHexLen) {
-				return; // Wait for more bytes.
+				if (this._logger.IsTraceEnabled) {
+					this._logger.logTrace(
+						'Partial message: have ' + (this._rxBufferHex.length / 2)
+						+ ' byte(s), need ' + messageSize + ' -- waiting for more data.',
+						this._loggerContext
+					);
+				}
+				return;
 			}
 
 			const messageHex = this._rxBufferHex.substring(0, messageHexLen);
@@ -99,7 +130,7 @@ class Device {
 		this._latestConnectionState = state;
 
 		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace('OnConnectionStateChanged -> ' + ConnectionState[state], this._loggerContext);
+			this._logger.logTrace('Connection state -> ' + ConnectionState[state], this._loggerContext);
 		}
 
 		switch (state) {
@@ -107,11 +138,9 @@ class Device {
 				this.setConnectedValue(true);
 				System.SignalEvent('Connected' + this._index);
 				this._rxBufferHex = '';
-				this._sequenceNumber = 1;
-				this._remoteSessionNumber = 0;
-				this.refreshLocalSessionNumber();
-				this.sendHelloQuery();
-				this.subscribeAllParameters();
+				this._subscriptionsSent = false;
+				this._logger.logInfo('Connected -- sending Discovery.', this._loggerContext);
+				this.sendDiscoveryQuery();
 				this._pollingEvent.Enable();
 				break;
 			case ConnectionState.Disconnected:
@@ -128,7 +157,22 @@ class Device {
 	}
 
 	public OnPollingEventElapsed() {
-		// Keep-alive: spec says send DiscoInfo(I) within KAP if no other traffic.
+		// Fallback: if Discovery(I) was never received, subscribe now so we don't wait indefinitely.
+		if (!this._subscriptionsSent) {
+			this._logger.logInfo(
+				'Discovery response not received before first poll tick -- sending subscriptions now (fallback).',
+				this._loggerContext
+			);
+			this.sendParameterSubscriptions();
+			this._subscriptionsSent = true;
+		}
+
+		// Re-check our IP on each poll until a valid address is available (SDK: may be 0.0.0.0 at startup).
+		if (this._controllerIpHex === '00000000') {
+			this.refreshControllerIp();
+		}
+
+		// Keep-alive: spec s.8.6 -- send DiscoInfo(I) if no other message sent within KAP.
 		this.sendDiscoInfoKeepAlive();
 	}
 
@@ -166,71 +210,206 @@ class Device {
 
 	//#region Outgoing messages
 
-	private sendHelloQuery() {
-		// Hello Query: payload = SessionNumber(UWORD) + FlagMask(UWORD). No session extension.
-		const destAddress = this._deviceAddressPrefixHex + '000000';
-		const payload = this._localSessionNumber.toString(16).padLeft(4) + '01FF';
-		const header = this.buildHeader(Device.MSGID_HELLO, destAddress, payload.length / 2, Device.FLAG_GUARANTEED, false);
+	private sendDiscoveryQuery() {
+		const dest = this._deviceAddressPrefixHex + '000000';
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace('TX Discovery query to ' + dest.toUpperCase() + '.', this._loggerContext);
+		}
+		const payload = this.buildDiscoInfoPayload();
+		const header = this.buildHeader(Device.MSGID_DISCO_INFO, dest, payload.length / 2, Device.FLAG_GUARANTEED, false);
 		this.transmit(header + payload);
 	}
 
 	private sendGoodbye() {
-		// Goodbye payload = Device Address UWORD
+		// Goodbye payload = Device Address UWORD.
 		const destAddress = this._deviceAddressPrefixHex + '000000';
 		const payload = this._deviceAddressOnlyHex.padLeft(4);
+		this._logger.logInfo('TX Goodbye to device.', this._loggerContext);
 		const header = this.buildHeader(Device.MSGID_GOODBYE, destAddress, payload.length / 2, Device.FLAG_GUARANTEED, true);
 		this.transmit(header + payload);
 	}
 
 	private sendDiscoInfoKeepAlive() {
-		// Minimal DiscoInfo(I) sent unicast to the device per spec section 8.6 (TCP keep-alive).
-		const dest = this._deviceAddressPrefixHex + '000000';
-		const serialBlock = '0001' + '00'; // BLOCK: UWORD length=1, 1 dummy byte
-		const sourceDevHex = this._sourceAddressHex.substring(0, 4);
-		let payload = sourceDevHex;                         // HiQnet Device UWORD
-		payload += '00';                                    // Cost UBYTE
-		payload += serialBlock;                             // Serial Number BLOCK
-		payload += '00004000';                              // Max Message Size ULONG (16384)
-		payload += '2710';                                  // Keep Alive Period UWORD (10000ms)
-		payload += '01';                                    // NetworkID UBYTE (1 = TCP/IP)
-		payload += '000000000000';                          // MAC (6 bytes, zero — unknown)
-		payload += '00';                                    // DHCP/AutoIP UBYTE
-		payload += '00000000';                              // IP ULONG (unknown)
-		payload += '00000000';                              // Subnet ULONG
-		payload += '00000000';                              // Gateway ULONG
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace('TX DiscoInfo(I) keep-alive.', this._loggerContext);
+		}
+		this.sendDiscoInfo(this._deviceAddressPrefixHex + '000000');
+	}
 
+	private buildDiscoInfoPayload(): string {
+		const serialBlock = '0010' + '00000000000000000000000000000000';
+		const sourceDevHex = this._sourceAddressHex.substring(0, 4);
+		let payload = sourceDevHex;
+		payload += '01';
+		payload += serialBlock;
+		payload += '00100000';
+		payload += '2710';
+		payload += '01';
+		payload += '000000000000';
+		payload += '00';
+		payload += this._controllerIpHex;
+		payload += 'ffffffff';
+		payload += 'ffffffff';
+		return payload;
+	}
+
+	private sendDiscoInfo(dest: string) {
+		const payload = this.buildDiscoInfoPayload();
 		const flags = Device.FLAG_GUARANTEED | Device.FLAG_INFORMATION;
 		const header = this.buildHeader(Device.MSGID_DISCO_INFO, dest, payload.length / 2, flags, true);
 		this.transmit(header + payload);
 	}
 
-	private subscribeAllParameters() {
-		for (let i = 0; i < this._parameters.length; i++) {
-			const p = this._parameters[i];
-			if (p && p.IsSubscribeEnabled) {
-				this.sendParamSubscribe(p);
+
+	private handleDiscoInfo(flags: number, sourceAddress: string, payload: string) {
+		const isInfo = (flags & Device.FLAG_INFORMATION) != 0;
+
+		// Parse the sender's IP from the DiscoInfo payload for logging.
+		// Structure: Device(UWORD=4) + Cost(UBYTE=2) + Serial(BLOCK: UWORD len + data) +
+		//            MaxMsgSize(ULONG=8) + KAP(UWORD=4) + NetworkID(UBYTE=2) + NetworkInfo
+		let senderIp = '';
+		if (payload.length >= 10) {
+			const serialLen = hexToUnsignedInt(payload.substring(6, 10));
+			const networkIdOffset = 10 + serialLen * 2 + 8 + 4;
+			if (payload.length >= networkIdOffset + 2) {
+				const networkId = hexToUnsignedInt(payload.substring(networkIdOffset, networkIdOffset + 2));
+				if (networkId === 1) {
+					const ipOffset = networkIdOffset + 2 + 12 + 2;
+					if (payload.length >= ipOffset + 8) {
+						senderIp = this.hexToIpString(payload.substring(ipOffset, ipOffset + 8));
+					}
+				}
 			}
+		}
+
+		const sourceNode = sourceAddress.substring(0, 4).toLowerCase();
+		const deviceNode = this._deviceAddressOnlyHex.padLeft(4).toLowerCase();
+
+		if (!isInfo) {
+			// Discovery(Q): device is discovering us so it can route subscription pushes back.
+			// Respond with Discovery(I) so it can populate its routing table with our address.
+			this._logger.logInfo(
+				'Discovery(Q) from ' + sourceAddress.toUpperCase()
+				+ (senderIp ? ' (' + senderIp + ')' : '')
+				+ ' -- responding with Discovery(I).',
+				this._loggerContext
+			);
+			this.sendDiscoInfo(sourceAddress);
+		} else if (sourceNode === deviceNode && !this._subscriptionsSent) {
+			// Discovery(I) from our target device acknowledging our query -- subscribe now.
+			this._logger.logInfo(
+				'Discovery(I) from device ' + sourceAddress.toUpperCase()
+				+ (senderIp ? ' (' + senderIp + ')' : '')
+				+ ' -- sending subscriptions.',
+				this._loggerContext
+			);
+			this.sendParameterSubscriptions();
+			this._subscriptionsSent = true;
+		} else if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'Discovery(I) from ' + sourceAddress.toUpperCase()
+				+ (senderIp ? ' (' + senderIp + ')' : '')
+				+ (this._subscriptionsSent ? ' (already subscribed)' : ' (not our device)'),
+				this._loggerContext
+			);
 		}
 	}
 
-	private sendParamSubscribe(parameter: Parameter) {
+	private refreshControllerIp() {
+		const resolved = this.parseIpToHex(System.IPAddress);
+
+		if (resolved !== this._controllerIpHex) {
+			this._controllerIpHex = resolved;
+			this._logger.logInfo(
+				'Controller IP resolved to ' + this.hexToIpString(this._controllerIpHex),
+				this._loggerContext
+			);
+		}
+	}
+
+	private parseIpToHex(ipStr: string): string {
+		if (!ipStr) return '00000000';
+		const parts = ipStr.split('.');
+		if (parts.length !== 4) return '00000000';
+		let hex = '';
+		for (let i = 0; i < 4; i++) {
+			const n = parseInt(parts[i], 10);
+			if (isNaN(n) || n < 0 || n > 255) return '00000000';
+			hex += n.toString(16).padLeft(2);
+		}
+		return hex;
+	}
+
+	private hexToIpString(hex: string): string {
+		if (!hex || hex.length < 8) return '';
+		const parts: string[] = [];
+		for (let i = 0; i < 8; i += 2) {
+			parts.push(hexToUnsignedInt(hex.substring(i, i + 2)).toString(10));
+		}
+		return parts.join('.');
+	}
+
+	private sendParameterSubscriptions() {
+		let count = 0;
+		for (let i = 0; i < this._parameters.length; i++) {
+			const p = this._parameters[i];
+			if (!p || !p.IsSubscribeEnabled) continue;
+			this.sendMultiParamSubscribe(p);
+			this.sendParamGet(p);
+			count++;
+		}
+		this._logger.logInfo('Sent MultiParamSubscribe + MultiParamGet for ' + count + ' parameter(s).', this._loggerContext);
+	}
+
+	private sendMultiParamSubscribe(parameter: Parameter) {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
-		const subscriberAddress = this._sourceAddressPrefixHex + parameter.ObjectAddress;
+		let payload = '0001';                  // NO OF SUBSCRIPTIONS: 1
+		payload += parameter.Id;               // PUBLISHER PARAM ID
+		payload += '00';                       // SUBSCRIPTION TYPE: 0
+		payload += this._sourceAddressHex;     // SUBSCRIBER ADDRESS (NODE + VD-OBJECT)
+		payload += parameter.Id;               // SUBSCRIBER PARAM ID
+		payload += '00';                       // Reserved
+		payload += '0000';                     // Reserved
+		payload += '0032';                     // SENSOR RATE: 50ms
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'TX MultiParamSubscribe "' + parameter.Name
+				+ '" obj=0x' + parameter.ObjectAddress.toUpperCase()
+				+ ' paramId=0x' + parameter.Id.toUpperCase(),
+				this._loggerContext
+			);
+		}
+		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SUBSCRIBE, dest, payload.length / 2, Device.FLAG_GUARANTEED, false);
+		this.transmit(header + payload);
+	}
 
-		let payload = '0001';                          // NumSubscriptions UWORD
-		payload += parameter.Id;                        // Publisher Param_ID UWORD
-		payload += parameter.SubscriptionType;          // Subscription Type UBYTE
-		payload += subscriberAddress;                   // Subscriber Address (6 bytes)
-		payload += parameter.Id;                        // Subscriber Param_ID UWORD
-		payload += '000000';                            // Reserved UBYTE + UWORD
-		payload += parameter.SensorRate;                // Sensor Rate UWORD
-
-		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SUBSCRIBE, dest, payload.length / 2, Device.FLAG_GUARANTEED, true);
+	private sendParamGet(parameter: Parameter) {
+		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
+		let payload = '0001';      // PARAMETER COUNT: 1
+		payload += parameter.Id;   // PARAMETER ID
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'TX MultiParamGet "' + parameter.Name
+				+ '" obj=0x' + parameter.ObjectAddress.toUpperCase()
+				+ ' paramId=0x' + parameter.Id.toUpperCase(),
+				this._loggerContext
+			);
+		}
+		const header = this.buildHeader(Device.MSGID_PARAM_GET, dest, payload.length / 2, Device.FLAG_GUARANTEED, false);
 		this.transmit(header + payload);
 	}
 
 	private sendParamSet(parameter: Parameter, hexValue: string) {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'TX MultiParamSet "' + parameter.Name + '"'
+				+ ' paramId=0x' + parameter.Id.toUpperCase()
+				+ ' dataType=' + hexToUnsignedInt(parameter.DataType)
+				+ ' value=0x' + hexValue.toUpperCase(),
+				this._loggerContext
+			);
+		}
 		let payload = '0001';                           // NumParam UWORD
 		payload += parameter.Id;                        // Param_ID UWORD
 		payload += parameter.DataType;                  // DataType UBYTE
@@ -242,6 +421,15 @@ class Device {
 	private sendParamSetPercent(parameter: Parameter, hexValueUword: string) {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
 		const value = hexValueUword.length == 4 ? hexValueUword : hexValueUword.padLeft(4);
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'TX ParamSetPercent "' + parameter.Name + '"'
+				+ ' paramId=0x' + parameter.Id.toUpperCase()
+				+ ' value=0x' + value.toUpperCase()
+				+ ' (' + hexToPercent115(value).toFixed(1) + '%)',
+				this._loggerContext
+			);
+		}
 		let payload = '0001';                           // NumPARAM UWORD
 		payload += parameter.Id;                        // PARAM_ID UWORD
 		payload += value;                               // PARAM_Value UWORD (1.15 fixed-point)
@@ -249,52 +437,33 @@ class Device {
 		this.transmit(header + payload);
 	}
 
-	private buildHeader(messageId: string, destAddress: string, payloadByteLen: number, flagsBits: number, includeSession: boolean): string {
-		let flags = flagsBits;
-		let extraBytes = 0;
-		let extension = '';
-
-		if (includeSession && this._remoteSessionNumber > 0) {
-			flags |= Device.FLAG_SESSION;
-			extension = this._remoteSessionNumber.toString(16).padLeft(4);
-			extraBytes = 2;
-		}
-
-		const headerLen = Device.STD_HEADER_LEN + extraBytes;
-		const totalLen = headerLen + payloadByteLen;
+	private buildHeader(messageId: string, destAddress: string, payloadByteLen: number, flagsBits: number, _unused: boolean, hopHex?: string): string {
+		const totalLen = Device.STD_HEADER_LEN + payloadByteLen;
 
 		let header = this._protocolVersionHex;
-		header += headerLen.toString(16).padLeft(2);
+		header += Device.STD_HEADER_LEN.toString(16).padLeft(2);
 		header += totalLen.toString(16).padLeft(8);
 		header += this._sourceAddressHex;
 		header += destAddress;
 		header += messageId;
-		header += flags.toString(16).padLeft(4);
-		header += this._hopCountHex;
-		header += this._sequenceNumber.toString(16).padLeft(4);
-		header += extension;
+		header += flagsBits.toString(16).padLeft(4);
+		header += hopHex !== undefined ? hopHex : this._hopCountHex;
+		header += '0000';
 
-		this.incrementSequenceNumber();
 		return header;
 	}
 
 	private transmit(messageHex: string) {
 		const clean = messageHex.cleanHex();
-		if (this._logger.IsTraceEnabled) this._logger.logTrace('TX: ' + clean, this._loggerContext);
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace('TX ' + (clean.length / 2) + ' byte(s): ' + clean.toUpperCase(), this._loggerContext);
+		}
 		const bytes = hexToBytes(clean);
 		const raw = String.fromCharCode.apply(null, bytes);
 		this.Connection.sendRawCommand(raw);
 	}
 
-	private incrementSequenceNumber() {
-		this._sequenceNumber++;
-		if (this._sequenceNumber > 0xFFFF) this._sequenceNumber = 1;
-	}
 
-	private refreshLocalSessionNumber() {
-		// Per spec: random 1-65535, must not repeat across reboots.
-		this._localSessionNumber = System.GetRandomInteger(1, 65535);
-	}
 
 	//#endregion
 
@@ -305,106 +474,194 @@ class Device {
 
 		const protocolVersionHex = messageHex.substring(0, 2);
 		if (protocolVersionHex != this._protocolVersionHex) {
-			this._logger.logError('Unexpected protocol version [' + protocolVersionHex + ']', this._loggerContext);
+			this._logger.logError(
+				'Unexpected protocol version 0x' + protocolVersionHex.toUpperCase()
+				+ ' (expected 0x' + this._protocolVersionHex.toUpperCase() + ') -- discarding.',
+				this._loggerContext
+			);
 			return;
 		}
 
 		const headerLenBytes = hexToUnsignedInt(messageHex.substring(2, 4));
-		const flags = hexToUnsignedInt(messageHex.substring(40, 44));
-		const messageIdHex = messageHex.substring(36, 40).toLowerCase();
-		const payloadStart = headerLenBytes * 2;
-		const payload = messageHex.substring(payloadStart);
+		const totalLenBytes  = hexToUnsignedInt(messageHex.substring(4, 12));
+		const sourceAddress  = messageHex.substring(12, 24);
+		const messageIdHex   = messageHex.substring(36, 40).toLowerCase();
+		const flags          = hexToUnsignedInt(messageHex.substring(40, 44));
+		const seqNum         = hexToUnsignedInt(messageHex.substring(46, 50));
+		const payloadStart   = headerLenBytes * 2;
+		const payload        = messageHex.substring(payloadStart);
 
-		// If session extension present, the device session number is the last 2 bytes of header.
-		if ((flags & Device.FLAG_SESSION) != 0 && headerLenBytes >= Device.STD_HEADER_LEN + 2) {
-			const sessExt = messageHex.substring(payloadStart - 4, payloadStart);
-			const sess = hexToUnsignedInt(sessExt);
-			if (sess > 0) this._remoteSessionNumber = sess;
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'RX msgId=0x' + messageIdHex.toUpperCase()
+				+ ' flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
+				+ ' headerLen=' + headerLenBytes
+				+ ' totalLen=' + totalLenBytes
+				+ ' src=' + sourceAddress.toUpperCase()
+				+ ' seq=' + seqNum
+				+ ' payloadBytes=' + (payload.length / 2),
+				this._loggerContext
+			);
 		}
 
-		// Strip error extension from payload if present (FLAG bit 3).
+		// Parse and log any error extension (FLAGS bit 3).
 		let effectivePayload = payload;
 		if ((flags & 0x0008) != 0) {
-			// Error code (UWORD) + Error string (STRING: UWORD byte_count + UTF-16 bytes)
-			if (effectivePayload.length >= 4) {
-				const errCode = hexToUnsignedInt(effectivePayload.substring(0, 4));
-				const strBytes = hexToUnsignedInt(effectivePayload.substring(4, 8));
-				this._logger.logError('Device returned error code 0x' + errCode.toString(16) + ' (msgId=' + messageIdHex + ')', this._loggerContext);
-				effectivePayload = effectivePayload.substring(8 + strBytes * 2);
+			if (effectivePayload.length >= 8) {
+				const errCode      = hexToUnsignedInt(effectivePayload.substring(0, 4));
+				const strByteCount = hexToUnsignedInt(effectivePayload.substring(4, 8));
+				let errStr = '';
+				const strData = effectivePayload.substring(8, 8 + strByteCount * 2);
+				for (let i = 0; i + 4 <= strData.length; i += 4) {
+					const code = hexToUnsignedInt(strData.substring(i, i + 4));
+					if (code === 0) break;
+					errStr += String.fromCharCode(code);
+				}
+				this._logger.logError(
+					'Device error: code=0x' + errCode.toString(16).padLeft(4).toUpperCase()
+					+ ' msgId=0x' + messageIdHex.toUpperCase()
+					+ (errStr ? ' message="' + errStr + '"' : ' (no error string)'),
+					this._loggerContext
+				);
+				effectivePayload = effectivePayload.substring(8 + strByteCount * 2);
+			} else {
+				this._logger.logError(
+					'Error flag set but payload too short to parse (msgId=0x' + messageIdHex.toUpperCase() + ').',
+					this._loggerContext
+				);
 			}
 		}
 
 		switch (messageIdHex) {
-			case '0000': /* DiscoInfo */
-				// Keep-alive or peer announcement; nothing to do here.
+			case '0000': /* Discovery */
+				this.handleDiscoInfo(flags, sourceAddress, effectivePayload);
 				break;
 			case '0007': /* Goodbye */
-				if (this._logger.IsTraceEnabled) this._logger.logTrace('Received Goodbye from device', this._loggerContext);
-				this._remoteSessionNumber = 0;
+				this._logger.logInfo('Received Goodbye from device.', this._loggerContext);
 				break;
-			case '0008': /* Hello (Info) */
-				this.handleHelloInfo(effectivePayload);
+			case '0008': /* Hello -- operating session-less; ignore */
+				if (this._logger.IsTraceEnabled) {
+					this._logger.logTrace('Received Hello from device (ignored -- session-less mode).', this._loggerContext);
+				}
 				break;
-			case '0100': /* MultiParamSet — also valid as subscription update */
-				this.handleMultiParamSet(effectivePayload, null);
+			case '0100': /* MultiParamSet -- subscription push notification or get response */
+				if (this._logger.IsTraceEnabled) {
+					this._logger.logTrace(
+						'RX MultiParamSet (0x0100) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
+						+ ' src=' + sourceAddress.toUpperCase(),
+						this._loggerContext
+					);
+				}
+				// Extract object address from source VD-OBJECT (bytes 3-5 of source address).
+				// Avoids false matches when multiple parameters share the same param ID.
+				{
+					const srcObj = sourceAddress.substring(6, 12);
+					this.handleMultiParamSet(effectivePayload, srcObj !== '000000' ? srcObj : null);
+				}
 				break;
-			case '0101': /* MultiObjectParamSet */
+			case '0101': /* MultiObjectParamSet -- subscription push notification */
+				this._logger.logInfo(
+					'RX MultiObjectParamSet (0x0101) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
+					+ ' src=' + sourceAddress.toUpperCase()
+					+ ' bytes=' + (effectivePayload.length / 2),
+					this._loggerContext
+				);
 				this.handleMultiObjectParamSet(effectivePayload);
 				break;
 			case '0103': /* MultiParamGet response (INFO flag set) */
 				if ((flags & Device.FLAG_INFORMATION) != 0) {
-					this.handleMultiParamSet(effectivePayload, null);
+					if (this._logger.IsTraceEnabled) {
+						this._logger.logTrace('Received MultiParamGet response (0x0103).', this._loggerContext);
+					}
+					const srcObj103 = sourceAddress.substring(6, 12);
+					this.handleMultiParamSet(effectivePayload, srcObj103 !== '000000' ? srcObj103 : null);
 				}
 				break;
 			default:
-				if (this._logger.IsTraceEnabled) this._logger.logTrace('Unhandled message id 0x' + messageIdHex, this._loggerContext);
+				if (this._logger.IsTraceEnabled) {
+					this._logger.logTrace('Unhandled message 0x' + messageIdHex.toUpperCase() + '.', this._loggerContext);
+				}
 				break;
 		}
 	}
 
-	private handleHelloInfo(payload: string) {
-		if (payload.length < 4) return;
-		// Per spec the device's session number is also in the payload (UWORD).
-		const sess = hexToUnsignedInt(payload.substring(0, 4));
-		if (sess > 0) this._remoteSessionNumber = sess;
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace('Hello Info: remote session = ' + this._remoteSessionNumber, this._loggerContext);
-		}
-	}
 
 	private handleMultiObjectParamSet(payload: string) {
-		if (payload.length < 4) return;
+		if (payload.length < 4) {
+			this._logger.logError('MultiObjectParamSet payload too short.', this._loggerContext);
+			return;
+		}
 		let pos = 0;
 		const numObjects = hexToUnsignedInt(payload.substring(pos, pos + 4));
 		pos += 4;
 
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace('MultiObjectParamSet: ' + numObjects + ' object(s).', this._loggerContext);
+		}
+
 		for (let o = 0; o < numObjects; o++) {
-			if (payload.length < pos + 8) return;
-			// Object_Dest = VD(1) + Object(3) = 4 bytes = 8 hex chars.
-			// The configured ObjectAddress is the 3-byte object portion.
+			if (payload.length < pos + 8) {
+				this._logger.logError(
+					'MultiObjectParamSet: payload truncated at object ' + o + '.',
+					this._loggerContext
+				);
+				return;
+			}
+			// Object_Dest is ULONG: VD(1 byte) + Object(3 bytes) = 4 bytes = 8 hex chars.
+			const vdAndObject   = payload.substring(pos, pos + 8);
 			const objectAddress = payload.substring(pos + 2, pos + 8);
 			pos += 8;
 
-			pos = this.consumeMultiParamSet(payload, pos, objectAddress);
-			if (pos < 0) return;
+			if (this._logger.IsTraceEnabled) {
+				this._logger.logTrace(
+					'  Object[' + o + ']: vd+obj=0x' + vdAndObject.toUpperCase()
+					+ ' (objAddr=0x' + objectAddress.toUpperCase() + ')',
+					this._loggerContext
+				);
+			}
+
+			pos = this.consumeMultiParamBlock(payload, pos, objectAddress);
+			if (pos < 0) {
+				this._logger.logError(
+					'MultiObjectParamSet: parse failure at object ' + o + '.',
+					this._loggerContext
+				);
+				return;
+			}
 		}
 	}
 
 	private handleMultiParamSet(payload: string, objectAddressOverride: string | null) {
-		this.consumeMultiParamSet(payload, 0, objectAddressOverride);
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'handleMultiParamSet: objFilter=' + (objectAddressOverride ? '0x' + objectAddressOverride.toUpperCase() : '*'),
+				this._loggerContext
+			);
+		}
+		this.consumeMultiParamBlock(payload, 0, objectAddressOverride);
 	}
 
-	// Consumes one MultiParam block beginning at `pos` in `payload`.
-	// If objectAddress is null, any parameter with the matching ID matches.
-	// Returns new position after the block or -1 on parse failure.
-	private consumeMultiParamSet(payload: string, pos: number, objectAddress: string | null): number {
+	// Parses one NumParams + param-value block beginning at `pos` inside `payload`.
+	// objectAddress: if non-null, only parameters whose ObjectAddress matches are updated.
+	// Returns the new buffer position, or -1 on parse failure.
+	private consumeMultiParamBlock(payload: string, pos: number, objectAddress: string | null): number {
 		if (payload.length < pos + 4) return -1;
 		const numParams = hexToUnsignedInt(payload.substring(pos, pos + 4));
 		pos += 4;
 
+		if (this._logger.IsTraceEnabled) {
+			this._logger.logTrace(
+				'  ' + numParams + ' param(s) for obj=' + (objectAddress ? '0x' + objectAddress.toUpperCase() : '*'),
+				this._loggerContext
+			);
+		}
+
 		for (let p = 0; p < numParams; p++) {
-			if (payload.length < pos + 6) return -1;
-			const paramId = payload.substring(pos, pos + 4).toLowerCase();
+			if (payload.length < pos + 6) {
+				this._logger.logError('Param block truncated at param index ' + p + '.', this._loggerContext);
+				return -1;
+			}
+			const paramId  = payload.substring(pos, pos + 4).toLowerCase();
 			const dataType = hexToUnsignedInt(payload.substring(pos + 4, pos + 6));
 			pos += 6;
 
@@ -413,28 +670,66 @@ class Device {
 			let consumed: number;
 
 			if (valueHexChars > 0) {
-				if (payload.length < pos + valueHexChars) return -1;
+				if (payload.length < pos + valueHexChars) {
+					this._logger.logError(
+						'Fixed-width value truncated for param 0x' + paramId.toUpperCase()
+						+ ' (need ' + valueHexChars + ' chars, have ' + (payload.length - pos) + ').',
+						this._loggerContext
+					);
+					return -1;
+				}
 				valueHex = payload.substring(pos, pos + valueHexChars);
 				consumed = valueHexChars;
 			} else if (dataType == HQ_BLOCK || dataType == HQ_STRING) {
-				if (payload.length < pos + 4) return -1;
+				if (payload.length < pos + 4) {
+					this._logger.logError('Variable-length size field truncated.', this._loggerContext);
+					return -1;
+				}
 				const blockBytes = hexToUnsignedInt(payload.substring(pos, pos + 4));
-				const blockHex = blockBytes * 2;
-				if (payload.length < pos + 4 + blockHex) return -1;
+				const blockHex   = blockBytes * 2;
+				if (payload.length < pos + 4 + blockHex) {
+					this._logger.logError(
+						'Variable-length data truncated for param 0x' + paramId.toUpperCase()
+						+ ' (declared ' + blockBytes + ' bytes, only ' + ((payload.length - pos - 4) / 2) + ' available).',
+						this._loggerContext
+					);
+					return -1;
+				}
 				valueHex = payload.substring(pos + 4, pos + 4 + blockHex);
 				consumed = 4 + blockHex;
 			} else {
-				this._logger.logError('Unknown data type ' + dataType + ' in response — stopping parse', this._loggerContext);
+				this._logger.logError(
+					'Unknown data type ' + dataType + ' for param 0x' + paramId.toUpperCase() + ' -- stopping parse.',
+					this._loggerContext
+				);
 				return -1;
 			}
 			pos += consumed;
 
+			if (this._logger.IsTraceEnabled) {
+				this._logger.logTrace(
+					'    Param id=0x' + paramId.toUpperCase()
+					+ ' dataType=' + dataType
+					+ ' rawValue=0x' + valueHex.toUpperCase(),
+					this._loggerContext
+				);
+			}
+
 			const parameter = this.findMatchingParameter(objectAddress, paramId);
 			if (!parameter) {
 				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace('No matching parameter for obj=' + (objectAddress || '*') + ' id=' + paramId, this._loggerContext);
+					this._logger.logTrace(
+						'    No configured parameter for obj='
+						+ (objectAddress ? '0x' + objectAddress.toUpperCase() : '*')
+						+ ' id=0x' + paramId.toUpperCase() + ' -- skipping.',
+						this._loggerContext
+					);
 				}
 				continue;
+			}
+
+			if (this._logger.IsTraceEnabled) {
+				this._logger.logTrace('    Matched to "' + parameter.Name + '".', this._loggerContext);
 			}
 
 			this.applyDecodedValue(parameter, dataType, valueHex);
@@ -459,22 +754,43 @@ class Device {
 		switch (parameter.VariableType) {
 			case 'Boolean': {
 				const decoded = decodeHiqnetValueHex(dataType, valueHex);
-				SystemVars.Write('ParameterBoolValue' + this._index + '_' + parameter.Index, decoded != 0, 'BOOLEAN');
+				const boolVal = decoded != 0;
+				if (this._logger.IsTraceEnabled) {
+					this._logger.logTrace(
+						'Update "' + parameter.Name + '" -> Boolean ' + boolVal
+						+ ' (raw=0x' + valueHex.toUpperCase() + ')',
+						this._loggerContext
+					);
+				}
+				SystemVars.Write('ParameterBoolValue' + this._index + '_' + parameter.Index, boolVal, 'BOOLEAN');
 				break;
 			}
 			case 'Integer': {
 				let n: number;
 				if (dataType == HQ_FLOAT32) {
-					// Round to int — variable is integer.
 					n = Math.round(hexToFloat32(valueHex));
 				} else {
 					n = decodeHiqnetValueHex(dataType, valueHex);
+				}
+				if (this._logger.IsTraceEnabled) {
+					this._logger.logTrace(
+						'Update "' + parameter.Name + '" -> Integer ' + n
+						+ ' (raw=0x' + valueHex.toUpperCase() + ')',
+						this._loggerContext
+					);
 				}
 				SystemVars.Write('ParameterIntValue' + this._index + '_' + parameter.Index, n);
 				break;
 			}
 			case 'String': {
 				const str = this.decodeStringValue(dataType, valueHex);
+				if (this._logger.IsTraceEnabled) {
+					this._logger.logTrace(
+						'Update "' + parameter.Name + '" -> String "' + str + '"'
+						+ ' (raw=0x' + valueHex.toUpperCase() + ')',
+						this._loggerContext
+					);
+				}
 				SystemVars.Write('ParameterStringValue' + this._index + '_' + parameter.Index, str);
 				break;
 			}
@@ -492,7 +808,7 @@ class Device {
 			}
 			return out.join('');
 		}
-		// For non-STRING types, hand back the numeric value as a decimal string.
+		// For non-STRING types, return the numeric value as a decimal string.
 		const n = decodeHiqnetValueHex(dataType, valueHex);
 		return n.toString();
 	}
@@ -525,8 +841,6 @@ class Device {
 	}
 
 	private updateParameterValueVariable(parameter: Parameter, hexValue: string) {
-		// Used for echoing controller-initiated Set values back into SystemVars.
-		// The hexValue is interpreted via the parameter's configured DataType.
 		const dataType = hexToUnsignedInt(parameter.DataType);
 		this.applyDecodedValue(parameter, dataType, hexValue);
 	}
