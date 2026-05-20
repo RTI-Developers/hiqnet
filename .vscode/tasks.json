@@ -49,7 +49,11 @@
             "type": "shell",
             "command": "t4 ConfigSettings.tt -o ConfigSettings.xml && t4 DeviceDescription.tt -o DeviceDescription.xml && t4 SystemEvents.tt -o SystemEvents.xml && t4 SystemFunctions.tt -o SystemFunctions.xml && t4 SystemVariables.tt -o SystemVariables.xml",
             "options": {
-                "cwd": ".\\configuration"
+                "cwd": ".\\configuration",
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/d", "/c"]
+                }
             },
             "group": "build"
         },

@@ -1,3 +1,5 @@
+/// <reference path="./lib/es3.d.ts" />
+
 interface ConfigStatic {
 	Get(name: string): string;
 }

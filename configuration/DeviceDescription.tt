@@ -4,8 +4,6 @@
 <device>
   <sources>
     <source maxitems="<#= deviceCount #>" sourceid="Device" name="HiQNet Device">
-      <templates>
-      </templates>
     </source>
   </sources>
 </device>

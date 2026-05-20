@@ -4,7 +4,7 @@
     "target": "es3",
     "allowJs": true,
     "outFile": "./dist/index.js",
-    "lib": ["ES5"],
+    "lib": [],
     "module": "none",
     "strictNullChecks": true,
     "ignoreDeprecations": "5.0"
