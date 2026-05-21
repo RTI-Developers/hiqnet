@@ -1,0 +1,79 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033\deflangfe1033{\fonttbl{\f0\fswiss\fprq2\fcharset0 Arial;}}
+{\*\generator Riched20 10.0.19041}{\*\mmathPr\mdispDef1\mwrapIndent1440 }\viewkind4\uc1
+\pard\nowidctlpar\b\f0\fs28 HiQNet\b0\fs20\par
+\par
+Driver provides ability to set and monitor parameters from HiQnet compatible devices. Supports up to 16 devices simultaneously, with up to 20 parameters per device.\par
+\par
+\b\fs24 Configuration\b0\fs20\par
+\par
+\b Global Settings\par
+\b0\par
+\pard\nowidctlpar\li360\b Total Device Count\b0  \emdash  Number of HiQNet devices to control (1\endash 16).\par
+\par
+\pard\nowidctlpar\b Advanced Settings\par
+\b0\par
+\pard\nowidctlpar\li360\b Protocol Version\b0  \emdash  HiQNet protocol version. Use \b 02\b0  for modern HiQNet-compatible devices. Use \b 01\b0  only for dbx ZonePro devices.\par
+\par
+\b Source Node Address\b0  \emdash  HiQNet node address assigned to this driver (default: 52). Must be unique on the network and must not conflict with Audio Architect\rquote s HiQNet address.\par
+\par
+\b Polling Interval (Seconds)\b0  \emdash  Keep-alive send interval in seconds (default: 8). Must be less than the device\rquote s 10-second KAP timeout.\par
+\par
+\pard\nowidctlpar\b Per-Device Settings\b0  (configured for each device 1\endash 16)\par
+\par
+\pard\nowidctlpar\li360\b Device Name\b0  \emdash  Friendly name used in RTI variable and event labels.\par
+\par
+\b IP / Hostname\b0  \emdash  IP address or hostname of the HiQNet device.\par
+\par
+\b HiQNet Address\b0  \emdash  The device\rquote s HiQNet network address, as shown in Audio Architect.\par
+\par
+\b HiQNet Virtual Device\b0  \emdash  The device\rquote s virtual device number, as shown in Audio Architect (typically 0).\par
+\par
+\b Parameter Count\b0  \emdash  Number of parameters to control or monitor on this device (1\endash 20).\par
+\par
+\pard\nowidctlpar\b Per-Parameter Settings\b0  (configured for each parameter per device)\par
+\par
+\pard\nowidctlpar\li360\b Name\b0  \emdash  Friendly name used in RTI variable labels.\par
+\par
+\b Object Address\b0  \emdash  The parameter\rquote s object address as shown in Audio Architect, in dot-separated decimal format (e.g., \b 15.22.7\b0 ).\par
+\par
+\b Parameter ID\b0  \emdash  The parameter ID as shown in Audio Architect.\par
+\par
+\b Allow Set\b0  \emdash  Enables sending values to the device for this parameter.\par
+\par
+\b Set Method\b0  (when Allow Set is enabled) \emdash  \b Set (typed)\b0  sends a raw typed value. \b Set % (1.15 fixed point)\b0  encodes the value as a 1.15 fixed-point percentage.\par
+\par
+\b Data Type\b0  (when Set Method is \ldblquote Set typed\rdblquote ) \emdash  HiQNet data type of the value being sent: BYTE, UBYTE, WORD, UWORD, LONG, ULONG, FLOAT32, FLOAT64, LONG64, or ULONG64.\par
+\par
+\b Enable Subscribe\b0  \emdash  Subscribes to push updates for this parameter from the device.\par
+\par
+\b Variable Type\b0  (when Enable Subscribe is enabled) \emdash  RTI variable type used to represent the received value: \b Boolean\b0 , \b Integer\b0 , or \b String\b0 .\par
+\par
+\pard\nowidctlpar\b\fs24 Variables\b0\fs20\par
+\par
+Variables are created per device (N = device number, 1\endash 16) and per parameter (P = parameter number, 1\endash 20). Category and variable labels use the configured device and parameter names.\par
+\par
+\pard\nowidctlpar\li360\b Connected\i N\i0\b0  (Boolean) \emdash  True when device N is connected; false when disconnected.\par
+\par
+\b ParameterBoolValue\i N\i0 _\i P\i0\b0  (Boolean) \emdash  Current value of parameter P on device N, for parameters with Variable Type = Boolean.\par
+\par
+\b ParameterIntValue\i N\i0 _\i P\i0\b0  (Integer) \emdash  Current value of parameter P on device N, for parameters with Variable Type = Integer.\par
+\par
+\b ParameterStringValue\i N\i0 _\i P\i0\b0  (String) \emdash  Current value of parameter P on device N, for parameters with Variable Type = String.\par
+\par
+\pard\nowidctlpar\b\fs24 Events\b0\fs20\par
+\par
+Events are fired per device (N = device number, 1\endash 16).\par
+\par
+\pard\nowidctlpar\li360\b Connected\i N\i0\b0  \emdash  Fired when device N successfully connects and completes initialization.\par
+\par
+\b Disconnected\i N\i0\b0  \emdash  Fired when device N loses its connection after previously being connected.\par
+\par
+\b Initialized\i N\i0\b0  \emdash  Fired when device N is instantiated during driver startup.\par
+\par
+\b ConnectionFailed\i N\i0\b0  \emdash  Fired when a TCP connection attempt to device N fails.\par
+\par
+\pard\nowidctlpar\b\fs24 Revision History\b0\fs20\par
+\par
+\pard\nowidctlpar\tx450 1.0:\tab Original release of the driver (partially complete)\par
+2.0:\tab Finish implementation of HiQNet protocol, many bug fixes\par
+}
