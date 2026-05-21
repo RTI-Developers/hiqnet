@@ -1,4 +1,11 @@
-/// <reference path="./lib/es3.d.ts" />
+/// <reference path="./lib/js17.d.ts" />
+
+/////////////////////////////
+/// RTI XP Driver SDK — TypeScript typings
+///
+/// SDK reference: RTI XP Driver Developer's Guide, script engine version 25
+/// Typings revision: 2
+/////////////////////////////
 
 interface ConfigStatic {
 	Get(name: string): string;
@@ -34,7 +41,9 @@ interface SystemStatic {
 	LogInfo(level: number, msg: string): boolean;
 	GetViewName(view: number): string;
 	LoadResource(resource: string): string;
+	/** @deprecated Use the Ping object instead (script engine v20+) */
 	Ping(address: string): boolean;
+	GetTickCount(): number;
 }
 
 declare const System: SystemStatic;
@@ -51,6 +60,7 @@ declare const Persistence: PersistenceStatic;
 type HashType = 'MD5' | 'SHA1' | 'SHA224' | 'SHA256' | 'SHA384' | 'SHA512' | 'RIPEMD160';
 
 interface CryptoStatic {
+	readonly Engine: string;
 	RSAGenerateKey(bits: number): string;
 	RSASign(privatekey: string, hashtype: HashType | 'NONE', data: string, length: number): string;
 	RSAVerify(
@@ -69,7 +79,7 @@ interface CryptoStatic {
 	GenerateRandomBitstream(bytes: number): string;
 	AESEncrypt(data: string, length: number, key: string, iv: string, cipher?: number, padding?: number): string;
 	AESDecrypt(data: string, length: number, key: string, iv: string, cipher?: number, padding?: number): string;
-	PDKDF2(cipher: string, password: string, iterations: number, salt: string): string;
+	PBKDF2(cipher: string, password: string, iterations: number, salt: string): string;
 	ChaCha20Poly1305Decrypt(key: string, nonce: string, data: string, tag?: string): string;
 	Argon2(hashtype: string, password: string, salt: string, opslimit: number, memlimit: number, size: number): string;
 }
@@ -98,15 +108,15 @@ interface TCPConstructor {
 declare const TCP: TCPConstructor;
 
 declare enum CertReason {
-	X509_OK = 0x00 /* The certificate is valid */,
-	X509_BADCERT_EXPIRED = 0x01 /* The certificate validity has expired. */,
-	X509_BADCERT_REVOKED = 0x02 /* The certificate has been revoked (is on a CRL). */,
-	X509_BADCERT_CN_MISMATCH = 0x04 /* The certificate Common Name (CN) does not match with the expected CN. */,
-	X509_BADCERT_NOT_TRUSTED = 0x08 /* The certificate is not correctly signed by the trusted CA. */,
-	X509_BADCRL_NOT_TRUSTED = 0x10 /* The CRL is not correctly signed by the trusted CA. */,
-	X509_BADCRL_EXPIRED = 0x20 /* The CRL is expired. */,
-	X509_BADCERT_MISSING = 0x40 /* Certificate was missing. */,
-	X509_BADCERT_SKIP_VERIFY = 0x80 /* Certificate verification was skipped. */,
+    X509_OK = 0x00,  /* The certificate is valid */
+    X509_BADCERT_EXPIRED = 0x01,  /* The certificate validity has expired. */
+    X509_BADCERT_REVOKED = 0x02,  /* The certificate has been revoked (is on a CRL). */
+    X509_BADCERT_CN_MISMATCH = 0x04,  /* The certificate Common Name (CN) does not match with the expected CN. */
+    X509_BADCERT_NOT_TRUSTED = 0x08,  /* The certificate is not correctly signed by the trusted CA. */
+    X509_BADCRL_NOT_TRUSTED = 0x10,  /* The CRL is not correctly signed by the trusted CA. */
+    X509_BADCRL_EXPIRED =  0x20,  /* The CRL is expired. */
+    X509_BADCERT_MISSING = 0x40,  /* Certificate was missing. */
+    X509_BADCERT_SKIP_VERIFY = 0x80  /* Certificate verification was skipped. */
 }
 
 declare enum CertMode {
@@ -122,14 +132,18 @@ interface HTTP extends Comm {
 	OnSSLHandshakeOKFunc: (handle: number, reason: CertReason) => void;
 	OnSSLHandshakeFailedFunc: (handle: number) => void;
 	readonly ConnectState: number;
-	OnWebsocketUpgradeOKFunc: (httpCode: string, handle: number) => void;
-	OnWebsocketUpgradeFailedFunc: (httpCode: string, handle: number) => void;
+	SSLHandshakeTimeout: number;
+	OnWebsocketUpgradeOKFunc: (httpCode: number, handle?: number) => void;
+	OnWebsocketUpgradeFailedFunc: (httpCode: number, handle?: number) => void;
+	OnWebsocketPingFunc: (handle?: number) => void;
 	Open(host?: string, port?: number, instance?: object, rx_buffer_size?: number): boolean;
 	Close(): boolean;
 	Disconnect(): boolean;
 	StartSSLHandshake(): boolean;
 	AddCertificateAuthority(certificate: string, mode: CertMode): boolean;
-	UpgradeWebsocket(path: string): boolean;
+	LoadClientCertificate(certificate: string, key: string, password?: string): boolean;
+	UpgradeWebsocket(path?: string): boolean;
+	WebsocketAddHeader(name: string, value: string): boolean;
 }
 
 interface HTTPConstructor {
@@ -146,11 +160,15 @@ interface Comm {
 	UseHandleInCallbacks: boolean;
 	readonly HeartbeatConnectState: boolean;
 	Write(data: string, rxtimeout?: number): boolean;
+	Read(timeout: number): string;
+	WaitForRx(timeout: number): boolean;
 	AddRxFraming(type: FramingType, stopChar: string): boolean;
 	AddRxFraming(type: FramingType, startChar: string, stopChar: string): boolean;
 	AddRxFraming(type: FramingType, length: number): boolean;
 	AddRxHTTPFraming(): boolean;
-	SetTxInterMsgDelay(delay: number);
+	SetTxInterMsgDelay(delay: number): boolean;
+	EnableHeartbeat(interval: number, sendheartbeatfunc: (handle?: number) => void, onconnectfunc: (handle?: number) => void, ondisconnectfunc: (handle?: number) => void): boolean;
+	HeartbeatReceived(): boolean;
 }
 
 interface CommConstructor {
@@ -163,7 +181,6 @@ interface Timer {
 	readonly Interval: number;
 	readonly State: number;
 	readonly Handle: number;
-	readonly OnTimer: (handle?: number) => void;
 	UseHandleInCallbacks: boolean;
 	Start(onTimerFunc: (handle: number) => void, timeout: number): boolean;
 	Stop(): boolean;
@@ -191,6 +208,7 @@ interface SystemVarsList<T> {
 	OnScrollInfoFunc: (view, highlight, top) => void;
 	Open: () => boolean;
 	Insert: (data: T) => boolean;
+	InsertWithImage: (data: string, url: string) => boolean;
 	InsertAt: (index: number, data: T) => boolean;
 	ReadAt: (index: number) => T;
 	ModifyAt: (index: number, data: T) => boolean;
@@ -212,7 +230,7 @@ interface SystemVarsListConstructor {
 declare const SystemVarsList: SystemVarsListConstructor;
 
 interface ScheduledEvent {
-	Enabled: boolean;
+	readonly Enabled: boolean;
 	readonly Handle: number;
 	UseHandleInCallbacks: boolean;
 	Disable(): boolean;
@@ -229,25 +247,41 @@ interface ScheduledEvent {
 		dailytype: 'TimeOfDay',
 		timeOfDay: string,
 		daysType: 'EVEN' | 'ODD' | 'BOTH',
-		daysOfWeek: 'ALL' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
 	): ScheduledEvent;
 	Reschedule(
 		onEventFunc: (handle: number) => void,
 		type: 'Daily',
 		dailytype: 'Sunrise',
-		sunriseType: 'On' | 'Before' | 'After',
+		sunriseType: 'On',
+		daysType: 'EVEN' | 'ODD' | 'BOTH',
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+	): ScheduledEvent;
+	Reschedule(
+		onEventFunc: (handle: number) => void,
+		type: 'Daily',
+		dailytype: 'Sunrise',
+		sunriseType: 'Before' | 'After',
 		offset: number,
 		daysType: 'EVEN' | 'ODD' | 'BOTH',
-		daysOfWeek: 'ALL' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
 	): ScheduledEvent;
 	Reschedule(
 		onEventFunc: (handle: number) => void,
 		type: 'Daily',
 		dailytype: 'Sunset',
-		sunsetType: 'On' | 'Before' | 'After',
+		sunsetType: 'On',
+		daysType: 'EVEN' | 'ODD' | 'BOTH',
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+	): ScheduledEvent;
+	Reschedule(
+		onEventFunc: (handle: number) => void,
+		type: 'Daily',
+		dailytype: 'Sunset',
+		sunsetType: 'Before' | 'After',
 		offset: number,
 		daysType: 'EVEN' | 'ODD' | 'BOTH',
-		daysOfWeek: 'ALL' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
 	): ScheduledEvent;
 }
 
@@ -264,26 +298,182 @@ interface ScheduledEventConstructor {
 		dailytype: 'TimeOfDay',
 		timeOfDay: string,
 		daysType: 'EVEN' | 'ODD' | 'BOTH',
-		daysOfWeek: 'ALL' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
 	): ScheduledEvent;
 	new (
 		onEventFunc: (handle: number) => void,
 		type: 'Daily',
 		dailytype: 'Sunrise',
-		sunriseType: 'On' | 'Before' | 'After',
+		sunriseType: 'On',
+		daysType: 'EVEN' | 'ODD' | 'BOTH',
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+	): ScheduledEvent;
+	new (
+		onEventFunc: (handle: number) => void,
+		type: 'Daily',
+		dailytype: 'Sunrise',
+		sunriseType: 'Before' | 'After',
 		offset: number,
 		daysType: 'EVEN' | 'ODD' | 'BOTH',
-		daysOfWeek: 'ALL' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
 	): ScheduledEvent;
 	new (
 		onEventFunc: (handle: number) => void,
 		type: 'Daily',
 		dailytype: 'Sunset',
-		sunsetType: 'On' | 'Before' | 'After',
+		sunsetType: 'On',
+		daysType: 'EVEN' | 'ODD' | 'BOTH',
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+	): ScheduledEvent;
+	new (
+		onEventFunc: (handle: number) => void,
+		type: 'Daily',
+		dailytype: 'Sunset',
+		sunsetType: 'Before' | 'After',
 		offset: number,
 		daysType: 'EVEN' | 'ODD' | 'BOTH',
-		daysOfWeek: 'ALL' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
+		daysOfWeek: 'All' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
 	): ScheduledEvent;
 }
 
 declare const ScheduledEvent: ScheduledEventConstructor;
+
+interface Serial extends Comm {
+	OnOneWayTxFunc: ((data: string, handle?: number) => void) | null;
+}
+
+interface SerialConstructor {
+	new (
+		rxfunc: (data: string, handle?: number) => void,
+		port: number,
+		baudrate: 115200 | 57600 | 38400 | 19200 | 9600 | 4800 | 2400 | 1200 | 600 | 300,
+		databits: 5 | 6 | 7 | 8,
+		stopbits: 1 | 2,
+		parity: 'None' | 'Odd' | 'Even' | 'Mark' | 'Space',
+		handshaking: 'None' | 'RTS' | 'DTR',
+		instance?: object
+	): Serial;
+}
+
+declare const Serial: SerialConstructor;
+
+interface TCPServer {
+	readonly Port: number;
+	OnClientConnectFunc: (fromaddr: string, channel: number, handle?: number) => void;
+	OnClientDisconnectFunc: (channel: number, handle?: number) => void;
+	Listen(profilename: 'UPnPEventServer'): boolean;
+	Listen(profilename: 'GenericServer', port: number): boolean;
+	Write(channel: number, data: string, rxtimeout?: number): boolean;
+	CloseChannel(channel: number): boolean;
+}
+
+interface TCPServerConstructor {
+	new (rxfunc: (channel: number, data: string, handle?: number) => void): TCPServer;
+}
+
+declare const TCPServer: TCPServerConstructor;
+
+interface UDP extends Comm {
+	WriteToAddress(host: string, port: number, data: string): boolean;
+}
+
+interface UDPConstructor {
+	new (
+		rxfunc: (data: string, handle?: number) => void,
+		host: string,
+		port: number,
+		instance?: object
+	): UDP;
+}
+
+declare const UDP: UDPConstructor;
+
+interface MulticastUDP extends Comm {
+	Enabled: boolean;
+	AddFilter(filter: string): boolean;
+	RemoveFilter(filter: string): boolean;
+	RemoveAllFilters(): boolean;
+}
+
+interface MulticastUDPConstructor {
+	new (
+		rxfunc: (fromaddr: string, fromport: number, data: string, handle?: number) => void,
+		group: string,
+		port?: number
+	): MulticastUDP;
+}
+
+declare const MulticastUDP: MulticastUDPConstructor;
+
+interface UtilStatic {
+	toString(data: string, length: number, format: 'HEXSTRINGLOWER' | 'HEXSTRINGUPPER' | 'HEXDUMPLOWER' | 'HEXDUMPUPPER', width?: number): string;
+}
+
+declare const Util: UtilStatic;
+
+interface PingObject {
+	Timeout: number;
+	readonly Count: number;
+	UseHandleInCallbacks: boolean;
+	OnPingOKFunc: (address: string, duration: number, handle?: number) => void;
+	OnPingFailedFunc: (address: string, reason: number, handle?: number) => void;
+	OnPingCompleteFunc: (handle?: number) => void;
+	Add(address: string): boolean;
+	Clear(): boolean;
+	Start(): boolean;
+	Stop(): boolean;
+}
+
+interface PingConstructor {
+	new (
+		onPingOK: (address: string, duration: number, handle?: number) => void,
+		onPingFailed: (address: string, reason: number, handle?: number) => void,
+		onPingComplete: (handle?: number) => void
+	): PingObject;
+}
+
+declare const Ping: PingConstructor;
+
+interface SSH extends Comm {
+	readonly OpenState: number;
+	OnConnectFunc: (handle?: number) => void;
+	OnConnectFailedFunc: (handle?: number) => void;
+	OnDisconnectFunc: (handle?: number) => void;
+	OnHandshakeOKFunc: (fingerprint: string, methods: string, handle?: number) => void;
+	OnHandshakeFailedFunc: (handle?: number) => void;
+	OnAuthenticationOKFunc: (handle?: number) => void;
+	OnAuthenticationFailedFunc: (handle?: number) => void;
+	Open(host: string, port?: number, rx_buffer_size?: number): boolean;
+	Close(): boolean;
+	Disconnect(): boolean;
+	StartHandshake(): boolean;
+	AuthenticatePassword(password: string): void;
+	AuthenticatePublicKey(privatekey: string, privatekeypassword?: string): void;
+	AddPromptResponse(prompt: string, response: string): void;
+	AuthenticateKeyboardInteractive(): void;
+}
+
+interface SSHConstructor {
+	new (
+		rxfunc: (data: string, handle?: number) => void,
+		host?: string,
+		port?: number,
+		rx_buffer_size?: number
+	): SSH;
+}
+
+declare const SSH: SSHConstructor;
+
+interface MDNS extends Comm {
+	Timeout: number;
+	Discover(type: string): boolean;
+}
+
+interface MDNSConstructor {
+	new (
+		onDiscoverFunc: (json: string, handle?: number) => void,
+		onCompleteFunc: (handle?: number) => void
+	): MDNS;
+}
+
+declare const MDNS: MDNSConstructor;

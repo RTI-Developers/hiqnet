@@ -1,19 +1,25 @@
 /// <reference no-default-lib="true"/>
 
 /////////////////////////////
-/// ECMAScript 3 baseline
-/// ES5+ APIs deliberately omitted so the TypeScript compiler flags them as
-/// errors rather than silently emitting code the RTI engine cannot run.
+/// Mozilla JavaScript 1.7 / SpiderMonkey (pre-ES5)
 ///
-/// Omissions vs lib.es5.d.ts:
-///   String  — trim / trimStart / trimEnd
-///   Array   — indexOf / lastIndexOf / every / some / forEach / map /
-///              filter / reduce / reduceRight
-///   Object  — create / defineProperty / defineProperties / getPrototypeOf /
-///              getOwnPropertyDescriptor / getOwnPropertyNames / keys /
-///              seal / freeze / preventExtensions / isSealed / isFrozen / isExtensible
-///   Function — bind / CallableFunction / NewableFunction
-///   JSON    — (entire global; not in ES3)
+/// Reflects the RTI processor's embedded SpiderMonkey engine, confirmed via
+/// runtime probing. The engine predates ES5 (2009) and corresponds to the
+/// Mozilla JavaScript 1.7 specification (Firefox 2 era, ~2006).
+///
+/// Present (ES3 baseline + Mozilla JS 1.6 array extras + SpiderMonkey extensions):
+///   Array.prototype — indexOf / lastIndexOf / every / some / forEach / map / filter
+///   Date            — now()
+///
+/// Absent (not available on RTI processors — do not use):
+///   Array.prototype — reduce / reduceRight
+///   Array           — isArray
+///   String          — trim / trimStart / trimEnd
+///   Object          — create / defineProperty / defineProperties / getPrototypeOf /
+///                     getOwnPropertyDescriptor / getOwnPropertyNames / keys /
+///                     seal / freeze / preventExtensions / isSealed / isFrozen / isExtensible
+///   Function        — bind
+///   JSON            — not native; provided by json2.js shim (see json2.d.ts)
 ///   Symbol, Promise, Proxy, Reflect, typed arrays — not present
 /////////////////////////////
 
@@ -237,6 +243,7 @@ interface DateConstructor {
     readonly prototype: Date;
     parse(s: string): number;
     UTC(year: number, monthIndex: number, date?: number, hours?: number, minutes?: number, seconds?: number, ms?: number): number;
+    now(): number;
 }
 
 declare var Date: DateConstructor;
@@ -336,7 +343,9 @@ interface URIErrorConstructor extends ErrorConstructor {
 declare var URIError: URIErrorConstructor;
 
 /////////////////////////////
-/// Array (ES3 only — no indexOf/forEach/map/filter/reduce/some/every)
+/// Array — confirmed present on RTI: indexOf, lastIndexOf, every, some,
+///          forEach, map, filter
+/// Confirmed absent: reduce, reduceRight, isArray
 /////////////////////////////
 
 interface ReadonlyArray<T> {
@@ -347,6 +356,14 @@ interface ReadonlyArray<T> {
     concat(...items: (T | ConcatArray<T>)[]): T[];
     join(separator?: string): string;
     slice(start?: number, end?: number): T[];
+    indexOf(searchElement: T, fromIndex?: number): number;
+    lastIndexOf(searchElement: T, fromIndex?: number): number;
+    every(predicate: (value: T, index: number, array: ReadonlyArray<T>) => unknown, thisArg?: any): boolean;
+    some(predicate: (value: T, index: number, array: ReadonlyArray<T>) => unknown, thisArg?: any): boolean;
+    forEach(callbackfn: (value: T, index: number, array: ReadonlyArray<T>) => void, thisArg?: any): void;
+    map<U>(callbackfn: (value: T, index: number, array: ReadonlyArray<T>) => U, thisArg?: any): U[];
+    filter<S extends T>(predicate: (value: T, index: number, array: ReadonlyArray<T>) => value is S, thisArg?: any): S[];
+    filter(predicate: (value: T, index: number, array: ReadonlyArray<T>) => unknown, thisArg?: any): T[];
     readonly [n: number]: T;
 }
 
@@ -373,6 +390,14 @@ interface Array<T> {
     splice(start: number, deleteCount?: number): T[];
     splice(start: number, deleteCount: number, ...items: T[]): T[];
     unshift(...items: T[]): number;
+    indexOf(searchElement: T, fromIndex?: number): number;
+    lastIndexOf(searchElement: T, fromIndex?: number): number;
+    every(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): boolean;
+    some(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): boolean;
+    forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
+    map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[];
+    filter<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): S[];
+    filter(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T[];
     [n: number]: T;
 }
 

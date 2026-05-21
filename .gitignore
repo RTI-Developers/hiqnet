@@ -1,4 +1,4 @@
+.claude/
 dist/
 node_modules/
-tools/*
-.claude/
+tools/
