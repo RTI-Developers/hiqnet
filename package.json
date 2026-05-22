@@ -17,5 +17,5 @@
     "uglify": "uglifyjs ./dist/index.js --compress arrows=false --mangle --output ./dist/index.js"
   },
   "author": "",
-  "license": "ISC"
+  "license": "MIT"
 }
