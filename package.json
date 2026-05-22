@@ -14,8 +14,7 @@
   },
   "scripts": {
     "fileCopy": "copyfiles -u 1 \"configuration/*.xml\" \"documentation/*\" \"resources/*\" dist",
-    "uglify": "",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "uglify": "uglifyjs ./dist/index.js --compress arrows=false --mangle --output ./dist/index.js"
   },
   "author": "",
   "license": "ISC"
