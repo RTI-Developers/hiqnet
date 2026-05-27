@@ -28,12 +28,17 @@
         {
             "label": "Install Dependencies - dotnet-t4",
             "type": "shell",
-            "command": "dotnet tool install --global dotnet-t4 --version 3.0.0",
+            "command": "dotnet tool install --global dotnet-t4 --version 3.0.0"
         },
         {
             "label": "Install Dependencies - npm",
             "type": "shell",
             "command": "npm install"
+        },
+        {
+            "label": "Process T4 Templates",
+            "type": "shell",
+            "command": "npm run process-t4",
         },
         {
             "label": "Typescript Build",
@@ -42,19 +47,6 @@
             "problemMatcher": [
                 "$tsc"
             ],
-            "group": "build"
-        },
-        {
-            "label": "Render T4 Templates",
-            "type": "shell",
-            "command": "t4 ConfigSettings.tt -o ConfigSettings.xml && t4 DeviceDescription.tt -o DeviceDescription.xml && t4 SystemEvents.tt -o SystemEvents.xml && t4 SystemFunctions.tt -o SystemFunctions.xml && t4 SystemVariables.tt -o SystemVariables.xml",
-            "options": {
-                "cwd": ".\\configuration",
-                "shell": {
-                    "executable": "cmd.exe",
-                    "args": ["/d", "/c"]
-                }
-            },
             "group": "build"
         },
         {
@@ -70,9 +62,27 @@
             },
             "dependsOrder": "sequence",
             "dependsOn": [
-                "Render T4 Templates",
                 "Typescript Build",
                 "Uglify Javascript",
+                "Process T4 Templates",
+				"FileCopy - Driver"
+            ]
+        },
+        {
+            "label": "Package Driver - Dev",
+            "type": "shell",
+            "command": "..\\tools\\PackageDriver.exe",
+            "options": {
+                "cwd": ".\\dist"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Typescript Build",
+                "Process T4 Templates",
 				"FileCopy - Driver"
             ]
         },
