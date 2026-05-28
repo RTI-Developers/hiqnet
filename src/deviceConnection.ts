@@ -48,14 +48,14 @@ class DeviceConnection
     // Caller must register TcpHandle / FailureTimerHandle before invoking this so the
     // handle-bearing RTI callbacks can resolve via the routing map.
     public start() {
-        this._logger.logInfo('Opening TCP connection to ' + this._ipAddress + ':' + this._port, this._loggerContext);
+        this._logger.logInfo('Opening TCP connection to ' + this._ipAddress + ':' + this._port, LogInfoLevel.Low, this._loggerContext);
         this._tcp.Open(this._ipAddress, this._port);
         this._tcp.SetTxInterMsgDelay(50);
         this.armFailureTimer();
     }
 
     public onConnect() {
-        if (this._logger.IsTraceEnabled) this._logger.logTrace('onConnect', this._loggerContext);
+        this._logger.logInfo('onConnect', LogInfoLevel.High, this._loggerContext);
         this._failureTimer.Stop();
         this.setState(ConnectionState.Connected);
     }
@@ -63,7 +63,7 @@ class DeviceConnection
     public onDisconnect() {
         // RTI's TCP object auto-reconnects after a drop unless Close() has been called.
         // We rearm the failure timer so the UI sees Failed if recovery takes too long.
-        if (this._logger.IsTraceEnabled) this._logger.logTrace('onDisconnect', this._loggerContext);
+        this._logger.logInfo('onDisconnect', LogInfoLevel.High, this._loggerContext);
         const wasConnected = this.State == ConnectionState.Connected;
         this.setState(ConnectionState.Disconnected);
         if (wasConnected) {
@@ -73,14 +73,14 @@ class DeviceConnection
 
     public onFailureTick() {
         if (this.State != ConnectionState.Connected) {
-            this._logger.logInfo('No TCP connection established within timeout; marking Failed', this._loggerContext);
+            this._logger.logInfo('No TCP connection established within timeout; marking Failed', LogInfoLevel.Low, this._loggerContext);
             this.setState(ConnectionState.Failed);
         }
     }
 
     public sendRawCommand(command: string): boolean {
         if (this.State != ConnectionState.Connected) {
-            this._logger.logInfo('sendRawCommand called while not connected; dropping', this._loggerContext);
+            this._logger.logInfo('sendRawCommand called while not connected; dropping', LogInfoLevel.Low, this._loggerContext);
             return false;
         }
         return this._tcp.Write(command);
@@ -101,7 +101,7 @@ class DeviceConnection
         if (state == this.State) return;
         // Failed is sticky: only a real Connected event clears it.
         if (this.State == ConnectionState.Failed && state == ConnectionState.Disconnected) return;
-        if (this._logger.IsTraceEnabled) this._logger.logTrace('State -> ' + ConnectionState[state], this._loggerContext);
+        this._logger.logInfo('State -> ' + ConnectionState[state], LogInfoLevel.High, this._loggerContext);
         this.State = state;
         this._onConnectionStateChanged(state);
     }

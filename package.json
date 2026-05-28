@@ -5,6 +5,8 @@
   "main": "index.ts",
   "dependencies": {},
   "devDependencies": {
+    "@rti-developers/sdk-types": "^1.0.0",
+    "@rti-developers/sdk-utils": "^1.0.0",
     "@typescript-eslint/eslint-plugin": "^5.60.1",
     "@typescript-eslint/parser": "5.60.1",
     "copyfiles": "^2.4.1",

@@ -1,4 +1,4 @@
-class Device {
+﻿class Device {
 	private static readonly STD_HEADER_LEN: number = 25;
 	private static readonly FLAG_INFORMATION: number = 0x0004;
 	private static readonly FLAG_GUARANTEED: number = 0x0020;
@@ -64,30 +64,28 @@ class Device {
 		this._pollingEvent.Disable();
 		this.PollingEventHandle = this._pollingEvent.Handle;
 
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'Constructed:'
-				+ ' srcAddr=' + this._sourceAddressHex.toUpperCase()
-				+ ' devicePrefix=' + this._deviceAddressPrefixHex.toUpperCase()
-				+ ' controllerIp=' + this.hexToIpString(this._controllerIpHex)
-				+ ' protocolVer=0x' + this._protocolVersionHex.toUpperCase()
-				+ ' pollIntervalSec=' + pollingIntervalSec
-				+ ' parameterCount=' + parameters.length,
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'Constructed:'
+			+ ' srcAddr=' + this._sourceAddressHex.toUpperCase()
+			+ ' devicePrefix=' + this._deviceAddressPrefixHex.toUpperCase()
+			+ ' controllerIp=' + this.hexToIpString(this._controllerIpHex)
+			+ ' protocolVer=0x' + this._protocolVersionHex.toUpperCase()
+			+ ' pollIntervalSec=' + pollingIntervalSec
+			+ ' parameterCount=' + parameters.length,
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 
 		System.SignalEvent('Initialized' + index);
 	}
 
 	public OnCommRx(data: string) {
 		const incoming = data.toHexByteArray().join('');
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'RX raw ' + (incoming.length / 2) + ' byte(s): ' + incoming.toUpperCase(),
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'RX raw ' + (incoming.length / 2) + ' byte(s): ' + incoming.toUpperCase(),
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 
 		this._rxBufferHex += incoming;
 
@@ -106,13 +104,12 @@ class Device {
 
 			const messageHexLen = messageSize * 2;
 			if (this._rxBufferHex.length < messageHexLen) {
-				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace(
-						'Partial message: have ' + (this._rxBufferHex.length / 2)
-						+ ' byte(s), need ' + messageSize + ' -- waiting for more data.',
-						this._loggerContext
-					);
-				}
+				this._logger.logInfo(
+					'Partial message: have ' + (this._rxBufferHex.length / 2)
+					+ ' byte(s), need ' + messageSize + ' -- waiting for more data.',
+					LogInfoLevel.High,
+					this._loggerContext
+				);
 				return;
 			}
 
@@ -126,9 +123,7 @@ class Device {
 		if (state == this._latestConnectionState) return;
 		this._latestConnectionState = state;
 
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace('Connection state -> ' + ConnectionState[state], this._loggerContext);
-		}
+		this._logger.logInfo('Connection state -> ' + ConnectionState[state], LogInfoLevel.High, this._loggerContext);
 
 		switch (state) {
 			case ConnectionState.Connected:
@@ -136,7 +131,7 @@ class Device {
 				System.SignalEvent('Connected' + this._index);
 				this._rxBufferHex = '';
 				this._subscriptionsSent = false;
-				this._logger.logInfo('Connected -- sending Discovery.', this._loggerContext);
+				this._logger.logInfo('Connected -- sending Discovery.', LogInfoLevel.Low, this._loggerContext);
 				this.sendDiscoveryQuery();
 				this._pollingEvent.Enable();
 				break;
@@ -158,6 +153,7 @@ class Device {
 		if (!this._subscriptionsSent) {
 			this._logger.logInfo(
 				'Discovery response not received before first poll tick -- sending subscriptions now (fallback).',
+				LogInfoLevel.Low,
 				this._loggerContext
 			);
 			this.sendParameterSubscriptions();
@@ -209,9 +205,7 @@ class Device {
 
 	private sendDiscoveryQuery() {
 		const dest = this._deviceAddressPrefixHex + '000000';
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace('TX Discovery query to ' + dest.toUpperCase() + '.', this._loggerContext);
-		}
+		this._logger.logInfo('TX Discovery query to ' + dest.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
 		const payload = this.buildDiscoInfoPayload();
 		const header = this.buildHeader(Device.MSGID_DISCO_INFO, dest, payload.length / 2, Device.FLAG_GUARANTEED);
 		this.transmit(header + payload);
@@ -221,15 +215,13 @@ class Device {
 		// Goodbye payload = Device Address UWORD.
 		const destAddress = this._deviceAddressPrefixHex + '000000';
 		const payload = this._deviceAddressOnlyHex.padLeft(4);
-		this._logger.logInfo('TX Goodbye to device.', this._loggerContext);
+		this._logger.logInfo('TX Goodbye to device.', LogInfoLevel.Low, this._loggerContext);
 		const header = this.buildHeader(Device.MSGID_GOODBYE, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	private sendDiscoInfoKeepAlive() {
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace('TX DiscoInfo(I) keep-alive.', this._loggerContext);
-		}
+		this._logger.logInfo('TX DiscoInfo(I) keep-alive.', LogInfoLevel.High, this._loggerContext);
 		this.sendDiscoInfo(this._deviceAddressPrefixHex + '000000');
 	}
 
@@ -289,6 +281,7 @@ class Device {
 				'Discovery(Q) from ' + sourceAddress.toUpperCase()
 				+ (senderIp ? ' (' + senderIp + ')' : '')
 				+ ' -- responding with Discovery(I).',
+				LogInfoLevel.Low,
 				this._loggerContext
 			);
 			this.sendDiscoInfo(sourceAddress);
@@ -298,15 +291,17 @@ class Device {
 				'Discovery(I) from device ' + sourceAddress.toUpperCase()
 				+ (senderIp ? ' (' + senderIp + ')' : '')
 				+ ' -- sending subscriptions.',
+				LogInfoLevel.Low,
 				this._loggerContext
 			);
 			this.sendParameterSubscriptions();
 			this._subscriptionsSent = true;
-		} else if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
+		} else {
+			this._logger.logInfo(
 				'Discovery(I) from ' + sourceAddress.toUpperCase()
 				+ (senderIp ? ' (' + senderIp + ')' : '')
 				+ (this._subscriptionsSent ? ' (already subscribed)' : ' (not our device)'),
+				LogInfoLevel.High,
 				this._loggerContext
 			);
 		}
@@ -319,6 +314,7 @@ class Device {
 			this._controllerIpHex = resolved;
 			this._logger.logInfo(
 				'Controller IP resolved to ' + this.hexToIpString(this._controllerIpHex),
+				LogInfoLevel.Low,
 				this._loggerContext
 			);
 		}
@@ -355,7 +351,7 @@ class Device {
 			this.sendMultiParamGet(p);
 			count++;
 		}
-		this._logger.logInfo('Sent MultiParamSubscribe + MultiParamGet for ' + count + ' parameter(s).', this._loggerContext);
+		this._logger.logInfo('Sent MultiParamSubscribe + MultiParamGet for ' + count + ' parameter(s).', LogInfoLevel.Low, this._loggerContext);
 	}
 
 	private sendMultiParamSubscribe(parameter: Parameter) {
@@ -368,14 +364,13 @@ class Device {
 		payload += '00';                       // Reserved
 		payload += '0000';                     // Reserved
 		payload += '0032';                     // SENSOR RATE: 50ms
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'TX MultiParamSubscribe "' + parameter.Name
-				+ '" obj=0x' + parameter.ObjectAddress.toUpperCase()
-				+ ' paramId=0x' + parameter.Id.toUpperCase(),
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'TX MultiParamSubscribe "' + parameter.Name
+			+ '" obj=0x' + parameter.ObjectAddress.toUpperCase()
+			+ ' paramId=0x' + parameter.Id.toUpperCase(),
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SUBSCRIBE, dest, payload.length / 2, Device.FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
@@ -384,29 +379,27 @@ class Device {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
 		let payload = '0001';      // PARAMETER COUNT: 1
 		payload += parameter.Id;   // PARAMETER ID
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'TX MultiParamGet "' + parameter.Name
-				+ '" obj=0x' + parameter.ObjectAddress.toUpperCase()
-				+ ' paramId=0x' + parameter.Id.toUpperCase(),
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'TX MultiParamGet "' + parameter.Name
+			+ '" obj=0x' + parameter.ObjectAddress.toUpperCase()
+			+ ' paramId=0x' + parameter.Id.toUpperCase(),
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_GET, dest, payload.length / 2, Device.FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	private sendMultiParamSet(parameter: Parameter, hexValue: string) {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'TX MultiParamSet "' + parameter.Name + '"'
-				+ ' paramId=0x' + parameter.Id.toUpperCase()
-				+ ' dataType=' + hexToUnsignedInt(parameter.DataType)
-				+ ' value=0x' + hexValue.toUpperCase(),
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'TX MultiParamSet "' + parameter.Name + '"'
+			+ ' paramId=0x' + parameter.Id.toUpperCase()
+			+ ' dataType=' + hexToUnsignedInt(parameter.DataType)
+			+ ' value=0x' + hexValue.toUpperCase(),
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 		let payload = '0001';                           // NumParam UWORD
 		payload += parameter.Id;                        // Param_ID UWORD
 		payload += parameter.DataType;                  // DataType UBYTE
@@ -418,15 +411,14 @@ class Device {
 	private sendMultiParamSetPercent(parameter: Parameter, hexValueUword: string) {
 		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
 		const value = hexValueUword.length == 4 ? hexValueUword : hexValueUword.padLeft(4);
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'TX ParamSetPercent "' + parameter.Name + '"'
-				+ ' paramId=0x' + parameter.Id.toUpperCase()
-				+ ' value=0x' + value.toUpperCase()
-				+ ' (' + hexToPercent115(value).toFixed(1) + '%)',
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'TX ParamSetPercent "' + parameter.Name + '"'
+			+ ' paramId=0x' + parameter.Id.toUpperCase()
+			+ ' value=0x' + value.toUpperCase()
+			+ ' (' + hexToPercent115(value).toFixed(1) + '%)',
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 		let payload = '0001';                           // NumPARAM UWORD
 		payload += parameter.Id;                        // PARAM_ID UWORD
 		payload += value;                               // PARAM_Value UWORD (1.15 fixed-point)
@@ -452,9 +444,7 @@ class Device {
 
 	private transmit(messageHex: string) {
 		const clean = messageHex.cleanHex();
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace('TX ' + (clean.length / 2) + ' byte(s): ' + clean.toUpperCase(), this._loggerContext);
-		}
+		this._logger.logInfo('TX ' + (clean.length / 2) + ' byte(s): ' + clean.toUpperCase(), LogInfoLevel.High, this._loggerContext);
 		const bytes = hexToBytes(clean);
 		let raw = '';
 		for (let i = 0; i < bytes.length; i++) {
@@ -489,18 +479,17 @@ class Device {
 		const payloadStart   = headerLenBytes * 2;
 		const payload        = messageHex.substring(payloadStart);
 
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'RX msgId=0x' + messageIdHex.toUpperCase()
-				+ ' flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
-				+ ' headerLen=' + headerLenBytes
-				+ ' totalLen=' + totalLenBytes
-				+ ' src=' + sourceAddress.toUpperCase()
-				+ ' seq=' + seqNum
-				+ ' payloadBytes=' + (payload.length / 2),
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'RX msgId=0x' + messageIdHex.toUpperCase()
+			+ ' flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
+			+ ' headerLen=' + headerLenBytes
+			+ ' totalLen=' + totalLenBytes
+			+ ' src=' + sourceAddress.toUpperCase()
+			+ ' seq=' + seqNum
+			+ ' payloadBytes=' + (payload.length / 2),
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 
 		// Parse and log any error extension (FLAGS bit 3).
 		let effectivePayload = payload;
@@ -535,21 +524,18 @@ class Device {
 				this.handleDiscoInfo(flags, sourceAddress, effectivePayload);
 				break;
 			case '0007': /* Goodbye */
-				this._logger.logInfo('Received Goodbye from device.', this._loggerContext);
+				this._logger.logInfo('Received Goodbye from device.', LogInfoLevel.Low, this._loggerContext);
 				break;
 			case '0008': /* Hello -- operating session-less; ignore */
-				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace('Received Hello from device (ignored -- session-less mode).', this._loggerContext);
-				}
+				this._logger.logInfo('Received Hello from device (ignored -- session-less mode).', LogInfoLevel.High, this._loggerContext);
 				break;
 			case '0100': /* MultiParamSet -- subscription push notification or get response */
-				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace(
-						'RX MultiParamSet (0x0100) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
-						+ ' src=' + sourceAddress.toUpperCase(),
-						this._loggerContext
-					);
-				}
+				this._logger.logInfo(
+					'RX MultiParamSet (0x0100) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
+					+ ' src=' + sourceAddress.toUpperCase(),
+					LogInfoLevel.High,
+					this._loggerContext
+				);
 				// Extract object address from source VD-OBJECT (bytes 3-5 of source address).
 				// Avoids false matches when multiple parameters share the same param ID.
 				{
@@ -562,23 +548,20 @@ class Device {
 					'RX MultiObjectParamSet (0x0101) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
 					+ ' src=' + sourceAddress.toUpperCase()
 					+ ' bytes=' + (effectivePayload.length / 2),
+					LogInfoLevel.Low,
 					this._loggerContext
 				);
 				this.handleMultiObjectParamSet(effectivePayload);
 				break;
 			case '0103': /* MultiParamGet response (INFO flag set) */
 				if ((flags & Device.FLAG_INFORMATION) != 0) {
-					if (this._logger.IsTraceEnabled) {
-						this._logger.logTrace('Received MultiParamGet response (0x0103).', this._loggerContext);
-					}
+					this._logger.logInfo('Received MultiParamGet response (0x0103).', LogInfoLevel.High, this._loggerContext);
 					const srcObj103 = sourceAddress.substring(6, 12);
 					this.handleMultiParamSet(effectivePayload, srcObj103 !== '000000' ? srcObj103 : null);
 				}
 				break;
 			default:
-				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace('Unhandled message 0x' + messageIdHex.toUpperCase() + '.', this._loggerContext);
-				}
+				this._logger.logInfo('Unhandled message 0x' + messageIdHex.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
 				break;
 		}
 	}
@@ -593,9 +576,7 @@ class Device {
 		const numObjects = hexToUnsignedInt(payload.substring(pos, pos + 4));
 		pos += 4;
 
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace('MultiObjectParamSet: ' + numObjects + ' object(s).', this._loggerContext);
-		}
+		this._logger.logInfo('MultiObjectParamSet: ' + numObjects + ' object(s).', LogInfoLevel.High, this._loggerContext);
 
 		for (let o = 0; o < numObjects; o++) {
 			if (payload.length < pos + 8) {
@@ -610,13 +591,12 @@ class Device {
 			const objectAddress = payload.substring(pos + 2, pos + 8);
 			pos += 8;
 
-			if (this._logger.IsTraceEnabled) {
-				this._logger.logTrace(
-					'  Object[' + o + ']: vd+obj=0x' + vdAndObject.toUpperCase()
-					+ ' (objAddr=0x' + objectAddress.toUpperCase() + ')',
-					this._loggerContext
-				);
-			}
+			this._logger.logInfo(
+				'  Object[' + o + ']: vd+obj=0x' + vdAndObject.toUpperCase()
+				+ ' (objAddr=0x' + objectAddress.toUpperCase() + ')',
+				LogInfoLevel.High,
+				this._loggerContext
+			);
 
 			pos = this.consumeMultiParamBlock(payload, pos, objectAddress);
 			if (pos < 0) {
@@ -630,12 +610,11 @@ class Device {
 	}
 
 	private handleMultiParamSet(payload: string, objectAddressOverride: string | null) {
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'handleMultiParamSet: objFilter=' + (objectAddressOverride ? '0x' + objectAddressOverride.toUpperCase() : '*'),
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'handleMultiParamSet: objFilter=' + (objectAddressOverride ? '0x' + objectAddressOverride.toUpperCase() : '*'),
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 		this.consumeMultiParamBlock(payload, 0, objectAddressOverride);
 	}
 
@@ -647,12 +626,11 @@ class Device {
 		const numParams = hexToUnsignedInt(payload.substring(pos, pos + 4));
 		pos += 4;
 
-		if (this._logger.IsTraceEnabled) {
-			this._logger.logTrace(
-				'  ' + numParams + ' param(s) for obj=' + (objectAddress ? '0x' + objectAddress.toUpperCase() : '*'),
-				this._loggerContext
-			);
-		}
+		this._logger.logInfo(
+			'  ' + numParams + ' param(s) for obj=' + (objectAddress ? '0x' + objectAddress.toUpperCase() : '*'),
+			LogInfoLevel.High,
+			this._loggerContext
+		);
 
 		for (let p = 0; p < numParams; p++) {
 			if (payload.length < pos + 6) {
@@ -704,31 +682,27 @@ class Device {
 			}
 			pos += consumed;
 
-			if (this._logger.IsTraceEnabled) {
-				this._logger.logTrace(
-					'    Param id=0x' + paramId.toUpperCase()
-					+ ' dataType=' + dataType
-					+ ' rawValue=0x' + valueHex.toUpperCase(),
-					this._loggerContext
-				);
-			}
+			this._logger.logInfo(
+				'    Param id=0x' + paramId.toUpperCase()
+				+ ' dataType=' + dataType
+				+ ' rawValue=0x' + valueHex.toUpperCase(),
+				LogInfoLevel.High,
+				this._loggerContext
+			);
 
 			const parameter = this.findMatchingParameter(objectAddress, paramId);
 			if (!parameter) {
-				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace(
-						'    No configured parameter for obj='
-						+ (objectAddress ? '0x' + objectAddress.toUpperCase() : '*')
-						+ ' id=0x' + paramId.toUpperCase() + ' -- skipping.',
-						this._loggerContext
-					);
-				}
+				this._logger.logInfo(
+					'    No configured parameter for obj='
+					+ (objectAddress ? '0x' + objectAddress.toUpperCase() : '*')
+					+ ' id=0x' + paramId.toUpperCase() + ' -- skipping.',
+					LogInfoLevel.High,
+					this._loggerContext
+				);
 				continue;
 			}
 
-			if (this._logger.IsTraceEnabled) {
-				this._logger.logTrace('    Matched to "' + parameter.Name + '".', this._loggerContext);
-			}
+			this._logger.logInfo('    Matched to "' + parameter.Name + '".', LogInfoLevel.High, this._loggerContext);
 
 			this.applyDecodedValue(parameter, dataType, valueHex);
 		}
@@ -753,13 +727,12 @@ class Device {
 			case 'Boolean': {
 				const decoded = decodeHiqnetValueHex(dataType, valueHex);
 				const boolVal = decoded != 0;
-				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace(
-						'Update "' + parameter.Name + '" -> Boolean ' + boolVal
-						+ ' (raw=0x' + valueHex.toUpperCase() + ')',
-						this._loggerContext
-					);
-				}
+				this._logger.logInfo(
+					'Update "' + parameter.Name + '" -> Boolean ' + boolVal
+					+ ' (raw=0x' + valueHex.toUpperCase() + ')',
+					LogInfoLevel.High,
+					this._loggerContext
+				);
 				SystemVars.Write('ParameterBoolValue' + this._index + '_' + parameter.Index, boolVal, 'BOOLEAN');
 				break;
 			}
@@ -770,25 +743,23 @@ class Device {
 				} else {
 					n = decodeHiqnetValueHex(dataType, valueHex);
 				}
-				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace(
-						'Update "' + parameter.Name + '" -> Integer ' + n
-						+ ' (raw=0x' + valueHex.toUpperCase() + ')',
-						this._loggerContext
-					);
-				}
+				this._logger.logInfo(
+					'Update "' + parameter.Name + '" -> Integer ' + n
+					+ ' (raw=0x' + valueHex.toUpperCase() + ')',
+					LogInfoLevel.High,
+					this._loggerContext
+				);
 				SystemVars.Write('ParameterIntValue' + this._index + '_' + parameter.Index, n);
 				break;
 			}
 			case 'String': {
 				const str = this.decodeStringValue(dataType, valueHex);
-				if (this._logger.IsTraceEnabled) {
-					this._logger.logTrace(
-						'Update "' + parameter.Name + '" -> String "' + str + '"'
-						+ ' (raw=0x' + valueHex.toUpperCase() + ')',
-						this._loggerContext
-					);
-				}
+				this._logger.logInfo(
+					'Update "' + parameter.Name + '" -> String "' + str + '"'
+					+ ' (raw=0x' + valueHex.toUpperCase() + ')',
+					LogInfoLevel.High,
+					this._loggerContext
+				);
 				SystemVars.Write('ParameterStringValue' + this._index + '_' + parameter.Index, str);
 				break;
 			}

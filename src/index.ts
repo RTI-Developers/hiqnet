@@ -13,22 +13,22 @@ function parseObjectAddress(addr: string): string {
 const g_debug = Config.Get('DebugTrace') == 'true';
 const g_logger = new Logger('HiQnet Driver', g_debug);
 
-g_logger.logInfo('Initializing HiQnet Driver');
+g_logger.logInfo('Initializing HiQnet Driver', LogInfoLevel.Low);
 
 const g_totalDeviceCount = parseInt(Config.Get('TotalDeviceCount'));
 const g_pollingIntervalSecondsRaw = parseInt(Config.Get('PollingIntervalSeconds'));
 const g_pollingIntervalSeconds = isNaN(g_pollingIntervalSecondsRaw) || g_pollingIntervalSecondsRaw < 1 ? 8 : g_pollingIntervalSecondsRaw;
 
-g_logger.logTrace('Total Device Count (' + g_totalDeviceCount + ')');
+g_logger.logInfo('Total Device Count (' + g_totalDeviceCount + ')', LogInfoLevel.High);
 
 const g_devices = new Array<Device>();
-const g_devicesGlobalHandlerMap = new GlobalHandlerMap<Device>();
+const g_devicesGlobalHandleMap = new GlobalHandleMap<Device>();
 
 for (let i = 1; i <= g_totalDeviceCount; i++) {
     const name = Config.Get('DeviceName' + i);
     const address = Config.Get('DeviceAddress' + i);
 
-    g_logger.logTrace('Instantiating device (' + name + ')');
+    g_logger.logInfo('Instantiating device (' + name + ')', LogInfoLevel.High);
 
     const parameterCount = parseInt(Config.Get('DeviceParameterCount' + i));
     const parameters = new Array<Parameter>();
@@ -71,9 +71,9 @@ for (let i = 1; i <= g_totalDeviceCount; i++) {
         g_logger
     );
 
-    g_devicesGlobalHandlerMap.register(device.PollingEventHandle, device);
-    g_devicesGlobalHandlerMap.register(device.Connection.TcpHandle, device);
-    g_devicesGlobalHandlerMap.register(device.Connection.FailureTimerHandle, device);
+    g_devicesGlobalHandleMap.register(device.PollingEventHandle, device);
+    g_devicesGlobalHandleMap.register(device.Connection.TcpHandle, device);
+    g_devicesGlobalHandleMap.register(device.Connection.FailureTimerHandle, device);
 
     g_devices[i] = device;
 
@@ -81,7 +81,7 @@ for (let i = 1; i <= g_totalDeviceCount; i++) {
 }
 
 System.OnShutdownFunc = function() {
-    g_logger.logInfo('Driver shutting down — closing device connections');
+    g_logger.logInfo('Driver shutting down — closing device connections', LogInfoLevel.Low);
     for (let i = 1; i < g_devices.length; i++) {
         const d = g_devices[i];
         if (d) d.Shutdown();
@@ -91,13 +91,13 @@ System.OnShutdownFunc = function() {
 //#region DeviceConnection event handlers
 
 function DeviceConnectionOnCommRx(data: string, handle: number) {
-    const device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
     if (!device) return;
     device.OnCommRx(data);
 }
 
 function DeviceConnectionOnConnect(handle: number) {
-    const device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
     if (!device) {
         g_logger.logError('DeviceConnectionOnConnect: unknown handle ' + handle);
         return;
@@ -106,7 +106,7 @@ function DeviceConnectionOnConnect(handle: number) {
 }
 
 function DeviceConnectionOnDisconnect(handle: number) {
-    const device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
     if (!device) {
         g_logger.logError('DeviceConnectionOnDisconnect: unknown handle ' + handle);
         return;
@@ -115,7 +115,7 @@ function DeviceConnectionOnDisconnect(handle: number) {
 }
 
 function DeviceConnectionOnFailureTick(handle: number) {
-    const device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
     if (!device) {
         g_logger.logError('DeviceConnectionOnFailureTick: unknown handle ' + handle);
         return;
@@ -128,7 +128,7 @@ function DeviceConnectionOnFailureTick(handle: number) {
 //#region Device event handlers
 
 function DeviceOnPollingEventElapsed(handle: number) {
-    const device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
     if (!device) {
         g_logger.logError('DeviceOnPollingEventElapsed: unknown handle ' + handle);
         return;
