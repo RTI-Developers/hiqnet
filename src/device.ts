@@ -19,6 +19,7 @@
 	private static readonly MSGID_MULTI_PARAM_SET_PERCENT: string = '0102';
 	private static readonly MSGID_MULTI_PARAM_GET: string = '0103';
 	private static readonly MSGID_MULTI_PARAM_SUBSCRIBE: string = '010f';
+	private static readonly MSGID_PARAM_SUBSCRIBE_PERCENT: string = '0111';
 	private static readonly SERIAL_NUMBER_LENGTH: string = '0010';  // UWORD: serial number payload is 16 bytes per spec
 	private static readonly STD_HEADER_LEN: number = 25;
 
@@ -706,6 +707,90 @@
 						LogInfoLevel.High,
 						this._loggerContext
 					);
+				}
+				break;
+			case Device.MSGID_MULTI_PARAM_SET_PERCENT: /* ParamSetPercent -- subscription push or ACK response */
+				this._logger.logInfo(
+					'RX ParamSetPercent (0x0102) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
+					+ ' src=' + sourceAddress.toUpperCase()
+					+ ' bytes=' + (effectivePayload.length / 2),
+					LogInfoLevel.High,
+					this._loggerContext
+				);
+				if (effectivePayload.length >= 4) {
+					const numParams = hexToUnsignedInt(effectivePayload.substring(0, 4));
+					let offset = 4;
+					for (let p = 0; p < numParams && offset + 6 <= effectivePayload.length; p++) {
+						const paramId = effectivePayload.substring(offset, offset + 4);
+						const valueHex = effectivePayload.substring(offset + 4, offset + 8);
+						offset += 8;
+
+						// Try to find the configured parameter by ID (ParamSetPercent doesn't include object addr in payload).
+						let paramObj: Parameter | undefined;
+						for (let pi = 0; pi < this._parameters.length && !paramObj; pi++) {
+							const pp = this._parameters[pi];
+							if (pp && pp.Id.toLowerCase() === paramId && pp.ObjectAddress.toLowerCase().indexOf(this._deviceAddress) === 0) {
+								paramObj = pp;
+							}
+						}
+						if (paramObj) {
+							// 1.15 signed fixed-point → integer value.
+							const n = Math.round(hexToPercent115(valueHex) / 100 * 0x7FFF);
+							this._logger.logInfo(
+								'ParamSetPercent update: "' + paramObj.Name + '" -> ' + hexToPercent115(valueHex).toFixed(1) + '% (raw=0x' + valueHex.toUpperCase() + ')',
+								LogInfoLevel.High,
+								this._loggerContext
+							);
+							SystemVars.Write('ParameterIntValue' + this._index + '_' + paramObj.Index, n);
+						} else {
+							this._logger.logInfo(
+								'ParamSetPercent: no configured param for 0x' + paramId.toUpperCase() + ' -- skipping.',
+								LogInfoLevel.Low,
+								this._loggerContext
+							);
+						}
+					}
+				}
+				break;
+			case Device.MSGID_PARAM_SUBSCRIBE_PERCENT: /* ParamSubscribePercent -- subscription push notification */
+				this._logger.logInfo(
+					'RX ParamSubscribePercent (0x0111) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
+					+ ' src=' + sourceAddress.toUpperCase()
+					+ ' bytes=' + (effectivePayload.length / 2),
+					LogInfoLevel.High,
+					this._loggerContext
+				);
+				if (effectivePayload.length >= 4) {
+					const numParams = hexToUnsignedInt(effectivePayload.substring(0, 4));
+					let offset = 4;
+					for (let p = 0; p < numParams && offset + 6 <= effectivePayload.length; p++) {
+						const paramId = effectivePayload.substring(offset, offset + 4);
+						const valueHex = effectivePayload.substring(offset + 4, offset + 8);
+						offset += 8;
+
+						let paramObj: Parameter | undefined;
+						for (let pi = 0; pi < this._parameters.length && !paramObj; pi++) {
+							const pp = this._parameters[pi];
+							if (pp && pp.Id.toLowerCase() === paramId && pp.ObjectAddress.toLowerCase().indexOf(this._deviceAddress) === 0) {
+								paramObj = pp;
+							}
+						}
+						if (paramObj) {
+							const n = Math.round(hexToPercent115(valueHex) / 100 * 0x7FFF);
+							this._logger.logInfo(
+								'ParamSubscribePercent update: "' + paramObj.Name + '" -> ' + hexToPercent115(valueHex).toFixed(1) + '% (raw=0x' + valueHex.toUpperCase() + ')',
+								LogInfoLevel.High,
+								this._loggerContext
+							);
+							SystemVars.Write('ParameterIntValue' + this._index + '_' + paramObj.Index, n);
+						} else {
+							this._logger.logInfo(
+								'ParamSubscribePercent: no configured param for 0x' + paramId.toUpperCase() + ' -- skipping.',
+								LogInfoLevel.Low,
+								this._loggerContext
+							);
+						}
+					}
 				}
 				break;
 			default:
