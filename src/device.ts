@@ -1,14 +1,16 @@
 ﻿class Device {
-	private static readonly STD_HEADER_LEN: number = 25;
 	private static readonly FLAG_INFORMATION: number = 0x0004;
 	private static readonly FLAG_GUARANTEED: number = 0x0020;
+	private static readonly FLAG_REQUEST_ACK: number = 0x0001;
 	private static readonly HOP_COUNT_HEX: string = '05';
 	private static readonly MSGID_DISCO_INFO: string = '0000';
 	private static readonly MSGID_GOODBYE: string = '0007';
+	private static readonly MSGID_HELLO: string = '0008';
 	private static readonly MSGID_MULTI_PARAM_SET: string = '0100';
 	private static readonly MSGID_MULTI_PARAM_SET_PERCENT: string = '0102';
 	private static readonly MSGID_MULTI_PARAM_GET: string = '0103';
 	private static readonly MSGID_MULTI_PARAM_SUBSCRIBE: string = '010f';
+	private static readonly STD_HEADER_LEN: number = 25;
 
 	private readonly _index: number;
 	private readonly _logger: Logger;
@@ -529,7 +531,8 @@
 				this._logger.logInfo('Received Goodbye from device.', LogInfoLevel.Low, this._loggerContext);
 				break;
 			case '0008': /* Hello -- operating session-less; ignore */
-				this._logger.logInfo('Received Hello from device (ignored -- session-less mode).', LogInfoLevel.High, this._loggerContext);
+				this._logger.logInfo('Received Hello from device.', LogInfoLevel.High, this._loggerContext);
+				this.handleHello(sourceAddress);
 				break;
 			case '0100': /* MultiParamSet -- subscription push notification or get response */
 				this._logger.logInfo(
@@ -555,8 +558,8 @@
 				);
 				this.handleMultiObjectParamSet(effectivePayload);
 				break;
-			case '0103': /* MultiParamGet response (INFO flag set) */
-				if ((flags & Device.FLAG_INFORMATION) != 0) {
+			case '0103': /* MultiParamGet response */
+				if ((flags & (Device.FLAG_INFORMATION | Device.FLAG_REQUEST_ACK)) != 0) {
 					this._logger.logInfo('Received MultiParamGet response (0x0103).', LogInfoLevel.High, this._loggerContext);
 					const srcObj103 = sourceAddress.substring(6, 12);
 					this.handleMultiParamSet(effectivePayload, srcObj103 !== '000000' ? srcObj103 : null);
@@ -568,6 +571,27 @@
 		}
 	}
 
+	private handleHello(sourceAddress: string) {
+		this._logger.logInfo('Sending Hello refusal to ' + sourceAddress.toUpperCase() + '.', LogInfoLevel.Low, this._loggerContext);
+
+		// Per HiQnet spec: refuse session by sending Hello with Error extension.
+		// Flags = 0x002C (Guaranteed + Error + Information).
+		// Payload = errorExtension block (errorCode=UWORD, strByteCount=UWORD) = 4 bytes.
+		const flags = Device.FLAG_GUARANTEED | Device.FLAG_REQUEST_ACK | Device.FLAG_INFORMATION; // 0x002C
+		const totalLen = Device.STD_HEADER_LEN + 4;
+
+		let header = this._protocolVersionHex;
+		header += Device.STD_HEADER_LEN.toString(16).padLeft(2);               // headerLen = 25
+		header += totalLen.toString(16).padLeft(8);                            // messageLen = 29
+		header += sourceAddress;                                               // dest address
+		header += this._sourceAddressHex;                                      // source address
+		header += Device.MSGID_HELLO;                                          // msgId
+		header += flags.toString(16).padLeft(4);                               // flags = 0x002C
+		header += Device.HOP_COUNT_HEX;                                        // hop count
+		header += '0000';                                                      // seqNum
+
+		this.transmit(header + '0000' + '0000'); // errorCode=0, strByteCount=0
+	}
 
 	private handleMultiObjectParamSet(payload: string) {
 		if (payload.length < 4) {
