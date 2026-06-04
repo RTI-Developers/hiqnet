@@ -147,3 +147,23 @@ function setParameter(deviceIndex: number, parameterIndex: number, hexValue: str
     if (!device) return;
     device.SetParameter(parameterIndex, hexValue);
 }
+
+function dumpDeviceInfo(deviceIndex: number) {
+    if (deviceIndex < 1 || deviceIndex >= g_devices.length) {
+        g_logger.logError('dumpDeviceInfo: deviceIndex (' + deviceIndex + ') out of range');
+        return;
+    }
+    const device = g_devices[deviceIndex];
+    if (!device) return;
+    device.DumpDeviceInfo();
+}
+
+function dumpVDList(deviceIndex: number) {
+    if (deviceIndex < 1 || deviceIndex >= g_devices.length) {
+        g_logger.logError('dumpVDList: deviceIndex (' + deviceIndex + ') out of range');
+        return;
+    }
+    const device = g_devices[deviceIndex];
+    if (!device) return;
+    device.DumpVDList();
+}

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <functions>
   <category name="%%DeviceName1%%" sourceid="Device1" condition="$TotalDeviceCount >= 1">
+    <function name="Dump Device Info" export="dumpDeviceInfo:1" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:1" repeatrate="0" />
     <function name="Set %%ParameterName1_1%% Value" export="setParameter:1_1" repeatrate="0" condition="$DeviceParameterCount1 >= 1">
       <parameter name="DeviceIndex" type="integer" default="1" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -103,6 +105,8 @@
     </function>
   </category>
   <category name="%%DeviceName2%%" sourceid="Device2" condition="$TotalDeviceCount >= 2">
+    <function name="Dump Device Info" export="dumpDeviceInfo:2" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:2" repeatrate="0" />
     <function name="Set %%ParameterName2_1%% Value" export="setParameter:2_1" repeatrate="0" condition="$DeviceParameterCount2 >= 1">
       <parameter name="DeviceIndex" type="integer" default="2" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -205,6 +209,8 @@
     </function>
   </category>
   <category name="%%DeviceName3%%" sourceid="Device3" condition="$TotalDeviceCount >= 3">
+    <function name="Dump Device Info" export="dumpDeviceInfo:3" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:3" repeatrate="0" />
     <function name="Set %%ParameterName3_1%% Value" export="setParameter:3_1" repeatrate="0" condition="$DeviceParameterCount3 >= 1">
       <parameter name="DeviceIndex" type="integer" default="3" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -307,6 +313,8 @@
     </function>
   </category>
   <category name="%%DeviceName4%%" sourceid="Device4" condition="$TotalDeviceCount >= 4">
+    <function name="Dump Device Info" export="dumpDeviceInfo:4" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:4" repeatrate="0" />
     <function name="Set %%ParameterName4_1%% Value" export="setParameter:4_1" repeatrate="0" condition="$DeviceParameterCount4 >= 1">
       <parameter name="DeviceIndex" type="integer" default="4" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -409,6 +417,8 @@
     </function>
   </category>
   <category name="%%DeviceName5%%" sourceid="Device5" condition="$TotalDeviceCount >= 5">
+    <function name="Dump Device Info" export="dumpDeviceInfo:5" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:5" repeatrate="0" />
     <function name="Set %%ParameterName5_1%% Value" export="setParameter:5_1" repeatrate="0" condition="$DeviceParameterCount5 >= 1">
       <parameter name="DeviceIndex" type="integer" default="5" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -511,6 +521,8 @@
     </function>
   </category>
   <category name="%%DeviceName6%%" sourceid="Device6" condition="$TotalDeviceCount >= 6">
+    <function name="Dump Device Info" export="dumpDeviceInfo:6" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:6" repeatrate="0" />
     <function name="Set %%ParameterName6_1%% Value" export="setParameter:6_1" repeatrate="0" condition="$DeviceParameterCount6 >= 1">
       <parameter name="DeviceIndex" type="integer" default="6" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -613,6 +625,8 @@
     </function>
   </category>
   <category name="%%DeviceName7%%" sourceid="Device7" condition="$TotalDeviceCount >= 7">
+    <function name="Dump Device Info" export="dumpDeviceInfo:7" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:7" repeatrate="0" />
     <function name="Set %%ParameterName7_1%% Value" export="setParameter:7_1" repeatrate="0" condition="$DeviceParameterCount7 >= 1">
       <parameter name="DeviceIndex" type="integer" default="7" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -715,6 +729,8 @@
     </function>
   </category>
   <category name="%%DeviceName8%%" sourceid="Device8" condition="$TotalDeviceCount >= 8">
+    <function name="Dump Device Info" export="dumpDeviceInfo:8" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:8" repeatrate="0" />
     <function name="Set %%ParameterName8_1%% Value" export="setParameter:8_1" repeatrate="0" condition="$DeviceParameterCount8 >= 1">
       <parameter name="DeviceIndex" type="integer" default="8" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -817,6 +833,8 @@
     </function>
   </category>
   <category name="%%DeviceName9%%" sourceid="Device9" condition="$TotalDeviceCount >= 9">
+    <function name="Dump Device Info" export="dumpDeviceInfo:9" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:9" repeatrate="0" />
     <function name="Set %%ParameterName9_1%% Value" export="setParameter:9_1" repeatrate="0" condition="$DeviceParameterCount9 >= 1">
       <parameter name="DeviceIndex" type="integer" default="9" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -919,6 +937,8 @@
     </function>
   </category>
   <category name="%%DeviceName10%%" sourceid="Device10" condition="$TotalDeviceCount >= 10">
+    <function name="Dump Device Info" export="dumpDeviceInfo:10" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:10" repeatrate="0" />
     <function name="Set %%ParameterName10_1%% Value" export="setParameter:10_1" repeatrate="0" condition="$DeviceParameterCount10 >= 1">
       <parameter name="DeviceIndex" type="integer" default="10" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -1021,6 +1041,8 @@
     </function>
   </category>
   <category name="%%DeviceName11%%" sourceid="Device11" condition="$TotalDeviceCount >= 11">
+    <function name="Dump Device Info" export="dumpDeviceInfo:11" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:11" repeatrate="0" />
     <function name="Set %%ParameterName11_1%% Value" export="setParameter:11_1" repeatrate="0" condition="$DeviceParameterCount11 >= 1">
       <parameter name="DeviceIndex" type="integer" default="11" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -1123,6 +1145,8 @@
     </function>
   </category>
   <category name="%%DeviceName12%%" sourceid="Device12" condition="$TotalDeviceCount >= 12">
+    <function name="Dump Device Info" export="dumpDeviceInfo:12" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:12" repeatrate="0" />
     <function name="Set %%ParameterName12_1%% Value" export="setParameter:12_1" repeatrate="0" condition="$DeviceParameterCount12 >= 1">
       <parameter name="DeviceIndex" type="integer" default="12" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -1225,6 +1249,8 @@
     </function>
   </category>
   <category name="%%DeviceName13%%" sourceid="Device13" condition="$TotalDeviceCount >= 13">
+    <function name="Dump Device Info" export="dumpDeviceInfo:13" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:13" repeatrate="0" />
     <function name="Set %%ParameterName13_1%% Value" export="setParameter:13_1" repeatrate="0" condition="$DeviceParameterCount13 >= 1">
       <parameter name="DeviceIndex" type="integer" default="13" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -1327,6 +1353,8 @@
     </function>
   </category>
   <category name="%%DeviceName14%%" sourceid="Device14" condition="$TotalDeviceCount >= 14">
+    <function name="Dump Device Info" export="dumpDeviceInfo:14" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:14" repeatrate="0" />
     <function name="Set %%ParameterName14_1%% Value" export="setParameter:14_1" repeatrate="0" condition="$DeviceParameterCount14 >= 1">
       <parameter name="DeviceIndex" type="integer" default="14" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -1429,6 +1457,8 @@
     </function>
   </category>
   <category name="%%DeviceName15%%" sourceid="Device15" condition="$TotalDeviceCount >= 15">
+    <function name="Dump Device Info" export="dumpDeviceInfo:15" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:15" repeatrate="0" />
     <function name="Set %%ParameterName15_1%% Value" export="setParameter:15_1" repeatrate="0" condition="$DeviceParameterCount15 >= 1">
       <parameter name="DeviceIndex" type="integer" default="15" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>
@@ -1531,6 +1561,8 @@
     </function>
   </category>
   <category name="%%DeviceName16%%" sourceid="Device16" condition="$TotalDeviceCount >= 16">
+    <function name="Dump Device Info" export="dumpDeviceInfo:16" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:16" repeatrate="0" />
     <function name="Set %%ParameterName16_1%% Value" export="setParameter:16_1" repeatrate="0" condition="$DeviceParameterCount16 >= 1">
       <parameter name="DeviceIndex" type="integer" default="16" hidden="true"/>
       <parameter name="ParameterIndex" type="integer" default="1" hidden="true"/>

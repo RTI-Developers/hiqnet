@@ -10,13 +10,16 @@
 	private static readonly HOP_COUNT_HEX: string = '05';
 	private static readonly MAX_MESSAGE_SIZE: string = '00100000'; // Per spec, but also a common Ethernet MTU size to avoid fragmentation.
 	private static readonly MSGID_DISCO_INFO: string = '0000';
+	private static readonly MSGID_GET_ATTRIBUTES: string = '010d';
+	private static readonly MSGID_GET_VD_LIST: string = '011a';
 	private static readonly MSGID_GOODBYE: string = '0007';
 	private static readonly MSGID_HELLO: string = '0008';
 	private static readonly MSGID_MULTI_PARAM_SET: string = '0100';
+	private static readonly MSGID_MULTI_OBJECT_PARAM_SET: string = '0101';
 	private static readonly MSGID_MULTI_PARAM_SET_PERCENT: string = '0102';
 	private static readonly MSGID_MULTI_PARAM_GET: string = '0103';
 	private static readonly MSGID_MULTI_PARAM_SUBSCRIBE: string = '010f';
-	private static readonly SERIAL_NUMBER_LENGTH: string = '0010'; // 16 bytes per spec
+	private static readonly SERIAL_NUMBER_LENGTH: string = '0010';  // UWORD: serial number payload is 16 bytes per spec
 	private static readonly STD_HEADER_LEN: number = 25;
 
 	private readonly _deviceAddress: string;      		 // 4 hex chars
@@ -483,6 +486,50 @@
 		this.transmit(header + payload);
 	}
 
+	//#region Manual debugging helpers
+
+	private sendGetAttributes(attributeIds: number[]) {
+		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, Device.DEFAULT_OBJECT_ID);
+
+		let payload = '';
+		payload += attributeIds.length.toString(16).padLeft(4);  // Num_Attributes (UWORD)
+		for (const attrId of attributeIds) {
+			payload += attrId.toString(16).padLeft(4);           // Attribute_ID[] (UWORD each)
+		}
+
+		const flags = Device.FLAG_GUARANTEED;
+		const header = this.buildHeader(Device.MSGID_GET_ATTRIBUTES, destAddress, payload.length / 2, flags);
+		this.transmit(header + payload);
+
+		this._logger.logInfo(
+			'TX GetAttributes to ' + destAddress.toUpperCase()
+			+ ' attrs=[' + attributeIds.map(a => '0x' + a.toString(16).toUpperCase()).join(', ') + ']',
+			LogInfoLevel.High,
+			this._loggerContext
+		);
+	}
+
+	private sendGetVDList() {
+		const destAddress = 'FFFF00000000'; // Broadcast address per HiQnet spec s.8.7
+		const payload = '00';                // Root Virtual Device index
+		const flags = Device.FLAG_GUARANTEED;
+		const header = this.buildHeader(Device.MSGID_GET_VD_LIST, destAddress, payload.length / 2, flags);
+		this.transmit(header + payload);
+
+		this._logger.logInfo('TX GetVDList broadcast to ' + destAddress.toUpperCase(), LogInfoLevel.High, this._loggerContext);
+	}
+
+	public DumpDeviceInfo() {
+		// Query all standard HiQnet attributes (IDs 0x0001–0x0006) on the device root VD.
+		this.sendGetAttributes([0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006]);
+	}
+
+	public DumpVDList() {
+		this.sendGetVDList();
+	}
+
+	//#endregion
+
 	private buildHeader(messageId: string, destAddress: string, payloadByteLen: number, flagsBits: number): string {
 		const totalLen = Device.STD_HEADER_LEN + payloadByteLen;
 		const sourceAddress = this.createFullAddress(this._sourceDeviceAddress, Device.DEFAULT_VIRTUAL_DEVICE_ADDRESS, Device.DEFAULT_OBJECT_ID);
@@ -578,17 +625,17 @@
 		}
 
 		switch (messageIdHex) {
-			case '0000': /* Discovery */
+			case Device.MSGID_DISCO_INFO: /* Discovery */
 				this.handleDiscoInfo(flags, sourceAddress, effectivePayload);
 				break;
-			case '0007': /* Goodbye */
+			case Device.MSGID_GOODBYE: /* Goodbye */
 				this._logger.logInfo('Received Goodbye from device.', LogInfoLevel.Low, this._loggerContext);
 				break;
-			case '0008': /* Hello -- operating session-less; ignore */
+			case Device.MSGID_HELLO: /* Hello */
 				this._logger.logInfo('Received Hello from device.', LogInfoLevel.High, this._loggerContext);
 				this.handleHello(sourceAddress);
 				break;
-			case '0100': /* MultiParamSet -- subscription push notification or get response */
+			case Device.MSGID_MULTI_PARAM_SET: /* MultiParamSet -- subscription push notification or get response */
 				this._logger.logInfo(
 					'RX MultiParamSet (0x0100) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
 					+ ' src=' + sourceAddress.toUpperCase(),
@@ -602,7 +649,7 @@
 					this.handleMultiParamSet(effectivePayload, srcObj !== '000000' ? srcObj : null);
 				}
 				break;
-			case '0101': /* MultiObjectParamSet -- subscription push notification */
+			case Device.MSGID_MULTI_OBJECT_PARAM_SET: /* MultiObjectParamSet -- subscription push notification */
 				this._logger.logInfo(
 					'RX MultiObjectParamSet (0x0101) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
 					+ ' src=' + sourceAddress.toUpperCase()
@@ -612,11 +659,53 @@
 				);
 				this.handleMultiObjectParamSet(effectivePayload);
 				break;
-			case '0103': /* MultiParamGet response */
+			case Device.MSGID_MULTI_PARAM_GET: /* MultiParamGet response */
 				if ((flags & (Device.FLAG_INFORMATION | Device.FLAG_REQUEST_ACK)) != 0) {
 					this._logger.logInfo('Received MultiParamGet response (0x0103).', LogInfoLevel.High, this._loggerContext);
 					const srcObj103 = sourceAddress.substring(6, 12);
 					this.handleMultiParamSet(effectivePayload, srcObj103 !== '000000' ? srcObj103 : null);
+				}
+				break;
+			case Device.MSGID_GET_ATTRIBUTES: /* GetAttributes response */
+				if ((flags & Device.FLAG_INFORMATION) != 0) {
+					this._logger.logInfo(
+						'RX GetAttributes(I) from ' + sourceAddress.toUpperCase()
+						+ ' payloadBytes=' + (effectivePayload.length / 2),
+						LogInfoLevel.High,
+						this._loggerContext
+					);
+					if (effectivePayload.length >= 16) {
+						const respObjAddr = effectivePayload.substring(0, 12);
+						const numAttrs = hexToUnsignedInt(effectivePayload.substring(12, 16));
+						let attrOffset = 16;
+						let attrEntries = '';
+						for (let a = 0; a < numAttrs && attrOffset + 6 <= effectivePayload.length; a++) {
+							const dataType = hexToUnsignedInt(effectivePayload.substring(attrOffset, attrOffset + 2));
+							const numValues = hexToUnsignedInt(effectivePayload.substring(attrOffset + 2, attrOffset + 6));
+							const valueDataLen = numValues * 2;
+							const valueHex = effectivePayload.substring(attrOffset + 6, attrOffset + 6 + valueDataLen);
+							attrEntries += ' [' + dataType + ':' + numValues + '=' + valueHex.toUpperCase() + ']';
+							attrOffset += 6 + valueDataLen;
+						}
+						this._logger.logInfo(
+							'GetAttributes response: obj=' + respObjAddr.toUpperCase()
+							+ ' count=' + numAttrs + ' entries:' + attrEntries,
+							LogInfoLevel.Low,
+							this._loggerContext
+						);
+					}
+				} else if ((flags & Device.FLAG_REQUEST_ACK) != 0) {
+					this._logger.logInfo(
+						'RX GetAttributes ACK from ' + sourceAddress.toUpperCase(),
+						LogInfoLevel.High,
+						this._loggerContext
+					);
+				} else {
+					this._logger.logInfo(
+						'RX GetAttributes(Q) from ' + sourceAddress.toUpperCase(),
+						LogInfoLevel.High,
+						this._loggerContext
+					);
 				}
 				break;
 			default:
