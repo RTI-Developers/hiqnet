@@ -1,4 +1,5 @@
 .claude/
+.openwebui/
 configuration/ConfigSettings.xml
 configuration/DeviceDescription.xml
 configuration/SystemEvents.xml
@@ -7,3 +8,7 @@ configuration/SystemVariables.xml
 dist/
 node_modules/
 tools/
+
+# Test artifacts
+tests/*.log
+tests/test-env.ts

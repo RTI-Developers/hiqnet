@@ -189,8 +189,10 @@
 			this.sendMultiParamSet(parameter, hexValue);
 		}
 
-		// Echo locally so the UI reflects the change immediately.
-		this.updateParameterValueVariable(parameter, hexValue);
+		if (!parameter.IsSubscribeEnabled) {
+			// Echo locally so the UI reflects the change immediately.
+			this.updateParameterValueVariable(parameter, hexValue);
+		}
 	}
 
 	public Shutdown() {
