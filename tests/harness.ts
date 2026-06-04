@@ -42,16 +42,6 @@ function getNetworkIP(): string {
 } as any;
 
 // ─── Manual polyfills (NOT provided by test-harness or sdk-utils) ──
-/** LogInfoLevel — const enum in sdk-types, zero runtime value. */
-(globalThis as any).LogInfoLevel = { Low: 1, Medium: 2, High: 3 };
-
-/** ConnectionState enum used by the HiQnet driver (driver-specific). */
-(globalThis as any).ConnectionState = {
-    Disconnected: 0,
-    Connecting:   1,
-    Connected:    2,
-    Failed:       3,
-} as const;
 
 /** ScheduledEvent shim — not provided by any SDK package. */
 class ScheduledEventShim {
@@ -86,5 +76,5 @@ console.log(`[HARNESS] Using System.IPAddress = ${networkIP}`);
 export const harness = createHarness({
     driver: path.resolve(__dirname, '../dist/index.js'),
     config: TEST_CONFIG,
-    system: { IPAddress: networkIP },
+    system: { IPAddress: networkIP, LogLevel: 3, },
 });

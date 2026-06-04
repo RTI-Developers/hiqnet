@@ -73,7 +73,7 @@
 			+ ' controllerIp=' + this.hexToIpString(this._controllerIpHex)
 			+ ' protocolVer=0x' + this._protocolVersionHex.toUpperCase()
 			+ ' pollIntervalSec=' + pollingIntervalSec
-			+ ' parameterCount=' + parameters.length,
+			+ ' parameterCount=' + (parameters.length - 1),
 			LogInfoLevel.High,
 			this._loggerContext
 		);
@@ -191,10 +191,8 @@
 			this.sendMultiParamSet(parameter, hexValue);
 		}
 
-		if (!parameter.IsSubscribeEnabled) {
-			// Echo locally so the UI reflects the change immediately.
-			this.updateParameterValueVariable(parameter, hexValue);
-		}
+		// Echo locally so the UI reflects the change immediately.
+		this.updateParameterValueVariable(parameter, hexValue);
 	}
 
 	public Shutdown() {
@@ -347,51 +345,88 @@
 	}
 
 	private sendParameterSubscriptions() {
-		let count = 0;
-		for (let i = 0; i < this._parameters.length; i++) {
-			const p = this._parameters[i];
-			if (!p || !p.IsSubscribeEnabled) continue;
-			this.sendMultiParamSubscribe(p);
-			this.sendMultiParamGet(p);
-			count++;
+		const subParams = this._parameters.filter(p => p && p.IsSubscribeEnabled);
+		this._logger.logInfo('Found ' + subParams.length + ' subscribable parameter(s).', LogInfoLevel.High, this._loggerContext);
+		
+		if (subParams.length === 0) return;
+
+		this.sendMultiParamSubscribe(subParams);
+	}
+
+	private sendMultiParamSubscribe(parameters: Parameter[]) {
+		if (parameters.length === 0) return;
+
+		// Group parameters by destination object address.
+		const grouped: { [key: string]: Parameter[] } = {};
+		for (let i = 0; i < parameters.length; i++) {
+			const p = parameters[i];
+			const dest = this._deviceAddressPrefixHex + p.ObjectAddress;
+			if (!(dest in grouped)) grouped[dest] = [];
+			grouped[dest].push(p);
 		}
-		this._logger.logInfo('Sent MultiParamSubscribe + MultiParamGet for ' + count + ' parameter(s).', LogInfoLevel.Low, this._loggerContext);
+
+		let totalCount = 0;
+		for (const dest in grouped) {
+			const params = grouped[dest];
+			const destDisplay = params[0].ObjectAddress;
+			let payload = '';
+			payload += params.length.toString(16).padLeft(4);  // Num_Subscriptions
+
+			for (let j = 0; j < params.length; j++) {
+				const p = params[j];
+				payload += p.Id;               // Publisher_Param_ID (UWORD)
+				payload += '00';               // Subscription_Type: 0
+				payload += this._sourceAddressHex;  // Subscriber_Address (6 bytes)
+				payload += p.Id;               // Subscriber_Param_ID (UWORD)
+				payload += '000000';           // Reserved (3 bytes = 2 + 1 per spec)
+				payload += '0032';             // Sensor_Rate: 50ms
+			}
+
+			this._logger.logInfo(
+				'TX MultiParamSubscribe ' + params.length + ' param(s) to obj=0x' + destDisplay.toUpperCase(),
+				LogInfoLevel.High, this._loggerContext
+			);
+			const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SUBSCRIBE, dest, payload.length / 2, Device.FLAG_GUARANTEED);
+			this.transmit(header + payload);
+			totalCount += params.length;
+		}
+
+		this._logger.logInfo('Sent MultiParamSubscribe for ' + totalCount + ' parameter(s).', LogInfoLevel.Low, this._loggerContext);
 	}
 
-	private sendMultiParamSubscribe(parameter: Parameter) {
-		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
-		let payload = '0001';                  // NO OF SUBSCRIPTIONS: 1
-		payload += parameter.Id;               // PUBLISHER PARAM ID
-		payload += '00';                       // SUBSCRIPTION TYPE: 0
-		payload += this._sourceAddressHex;     // SUBSCRIBER ADDRESS (NODE + VD-OBJECT)
-		payload += parameter.Id;               // SUBSCRIBER PARAM ID
-		payload += '00';                       // Reserved
-		payload += '0000';                     // Reserved
-		payload += '0032';                     // SENSOR RATE: 50ms
-		this._logger.logInfo(
-			'TX MultiParamSubscribe "' + parameter.Name
-			+ '" obj=0x' + parameter.ObjectAddress.toUpperCase()
-			+ ' paramId=0x' + parameter.Id.toUpperCase(),
-			LogInfoLevel.High,
-			this._loggerContext
-		);
-		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SUBSCRIBE, dest, payload.length / 2, Device.FLAG_GUARANTEED);
-		this.transmit(header + payload);
-	}
+	private sendMultiParamGet(parameters: Parameter[]) {
+		if (parameters.length === 0) return;
 
-	private sendMultiParamGet(parameter: Parameter) {
-		const dest = this._deviceAddressPrefixHex + parameter.ObjectAddress;
-		let payload = '0001';      // PARAMETER COUNT: 1
-		payload += parameter.Id;   // PARAMETER ID
-		this._logger.logInfo(
-			'TX MultiParamGet "' + parameter.Name
-			+ '" obj=0x' + parameter.ObjectAddress.toUpperCase()
-			+ ' paramId=0x' + parameter.Id.toUpperCase(),
-			LogInfoLevel.High,
-			this._loggerContext
-		);
-		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_GET, dest, payload.length / 2, Device.FLAG_GUARANTEED);
-		this.transmit(header + payload);
+		// Group parameters by destination object address.
+		const grouped: { [key: string]: Parameter[] } = {};
+		for (let i = 0; i < parameters.length; i++) {
+			const p = parameters[i];
+			const dest = this._deviceAddressPrefixHex + p.ObjectAddress;
+			if (!(dest in grouped)) grouped[dest] = [];
+			grouped[dest].push(p);
+		}
+
+		let totalCount = 0;
+		for (const dest in grouped) {
+			const params = grouped[dest];
+			const destDisplay = params[0].ObjectAddress;
+			let payload = '';
+			payload += params.length.toString(16).padLeft(4);  // Num_Parameters
+
+			for (let j = 0; j < params.length; j++) {
+				payload += params[j].Id;  // Parameter_ID (UWORD) each
+			}
+
+			this._logger.logInfo(
+				'TX MultiParamGet ' + params.length + ' param(s) to obj=0x' + destDisplay.toUpperCase(),
+				LogInfoLevel.High, this._loggerContext
+			);
+			const header = this.buildHeader(Device.MSGID_MULTI_PARAM_GET, dest, payload.length / 2, Device.FLAG_GUARANTEED);
+			this.transmit(header + payload);
+			totalCount += params.length;
+		}
+
+		this._logger.logInfo('Sent MultiParamGet for ' + totalCount + ' parameter(s).', LogInfoLevel.Low, this._loggerContext);
 	}
 
 	private sendMultiParamSet(parameter: Parameter, hexValue: string) {
