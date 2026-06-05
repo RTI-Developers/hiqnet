@@ -19,6 +19,7 @@
 	private static readonly MSGID_MULTI_PARAM_SET_PERCENT: string = '0102';
 	private static readonly MSGID_MULTI_PARAM_GET: string = '0103';
 	private static readonly MSGID_MULTI_PARAM_SUBSCRIBE: string = '010f';
+	private static readonly MSGID_MULTI_PARAM_UNSUBSCRIBE: string = '0112';
 	private static readonly MSGID_PARAM_SUBSCRIBE_PERCENT: string = '0111';
 	private static readonly SERIAL_NUMBER_LENGTH: string = '0010';  // UWORD: serial number payload is 16 bytes per spec
 	private static readonly STD_HEADER_LEN: number = 25;
@@ -38,6 +39,7 @@
 	private _latestConnectionState: ConnectionState | undefined = undefined;
 	private _rxBufferHex: string = '';
 	private _subscriptionsSent: boolean = false;
+	private _hasSubscribed: boolean = false;
 	private _controllerIpHex: string = '00000000';
 	private _controllerNetMask: string = '00000000';
 
@@ -154,11 +156,13 @@
 				this._pollingEvent.Enable();
 				break;
 			case ConnectionState.Disconnected:
+				this._hasSubscribed = false;
 				this.setConnectedValue(false);
 				System.SignalEvent('Disconnected' + this._index);
 				this._pollingEvent.Disable();
 				break;
 			case ConnectionState.Failed:
+				this._hasSubscribed = false;
 				this.setConnectedValue(false);
 				System.SignalEvent('ConnectionFailed' + this._index);
 				this._pollingEvent.Disable();
@@ -174,7 +178,7 @@
 				LogInfoLevel.Low,
 				this._loggerContext
 			);
-			this.sendParameterSubscriptions();
+			this.sendMultiParamSubscribe();
 			this._subscriptionsSent = true;
 		}
 
@@ -214,6 +218,11 @@
 	public Shutdown() {
 		this._pollingEvent.Disable();
 		if (this._latestConnectionState == ConnectionState.Connected) {
+			if (this._hasSubscribed) {
+				const subParams = this._parameters.filter(p => p && p.IsSubscribeEnabled);
+				this.sendMultiParamUnsubscribe(subParams);
+				this._hasSubscribed = false;
+			}
 			this.sendGoodbye();
 		}
 		this.Connection.shutdown();
@@ -316,7 +325,7 @@
 				LogInfoLevel.Low,
 				this._loggerContext
 			);
-			this.sendParameterSubscriptions();
+			this.sendMultiParamSubscribe();
 			this._subscriptionsSent = true;
 		} else {
 			this._logger.logInfo(
@@ -365,22 +374,16 @@
 		return parts.join('.');
 	}
 
-	private sendParameterSubscriptions() {
+	private sendMultiParamSubscribe() {
 		const subParams = this._parameters.filter(p => p && p.IsSubscribeEnabled);
-		this._logger.logInfo('Found ' + subParams.length + ' subscribable parameter(s).', LogInfoLevel.High, this._loggerContext);
-		
 		if (subParams.length === 0) return;
 
-		this.sendMultiParamSubscribe(subParams);
-	}
-
-	private sendMultiParamSubscribe(parameters: Parameter[]) {
-		if (parameters.length === 0) return;
+		this._logger.logInfo('Sending MultiParamSubscribe for ' + subParams.length + ' subscribable parameter(s).', LogInfoLevel.High, this._loggerContext);
 
 		// Group parameters by destination object address.
 		const grouped: { [key: string]: Parameter[] } = {};
-		for (let i = 0; i < parameters.length; i++) {
-			const p = parameters[i];
+		for (let i = 0; i < subParams.length; i++) {
+			const p = subParams[i];
 			const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
 			if (!(destAddress in grouped)) grouped[destAddress] = [];
 			grouped[destAddress].push(p);
@@ -413,7 +416,33 @@
 			totalCount += params.length;
 		}
 
+		this._hasSubscribed = true;
 		this._logger.logInfo('Sent MultiParamSubscribe for ' + totalCount + ' parameter(s).', LogInfoLevel.Low, this._loggerContext);
+	}
+
+	private sendMultiParamUnsubscribe(parameters: Parameter[]) {
+		if (!parameters || parameters.length === 0) return;
+
+		this._logger.logInfo(
+			'TX MultiParamUnsubscribe for ' + parameters.length + ' previously subscribed parameter(s).',
+			LogInfoLevel.Low, this._loggerContext
+		);
+
+		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, Device.DEFAULT_OBJECT_ID);
+		const subscriberAddress = this.createFullAddress(this._sourceDeviceAddress, Device.DEFAULT_VIRTUAL_DEVICE_ADDRESS, Device.DEFAULT_OBJECT_ID);
+		
+		let payload = '';
+		payload += subscriberAddress;                              // Subscriber Address (HIQNETADDR)
+		payload += parameters.length.toString(16).padLeft(4);      // Num_Subscriptions (UWORD)
+		
+		for (let i = 0; i < parameters.length; i++) {
+			const p = parameters[i];
+			payload += p.Id;          // Publisher_Param_ID (UWORD)
+			payload += p.Id;          // Subscriber_Param_ID (UWORD)
+		}
+
+		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_UNSUBSCRIBE, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
+		this.transmit(header + payload);
 	}
 
 	private sendMultiParamGet(parameters: Parameter[]) {
