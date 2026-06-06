@@ -1,17 +1,3 @@
-// HiQnet data type enum (from spec section 3).
-const HQ_BYTE = 0;
-const HQ_UBYTE = 1;
-const HQ_WORD = 2;
-const HQ_UWORD = 3;
-const HQ_LONG = 4;
-const HQ_ULONG = 5;
-const HQ_FLOAT32 = 6;
-const HQ_FLOAT64 = 7;
-const HQ_BLOCK = 8;
-const HQ_STRING = 9;
-const HQ_LONG64 = 10;
-const HQ_ULONG64 = 11;
-
 function hexToBytes(hex: string): number[] {
     const bytes: number[] = [];
     for (let c = 0; c + 1 < hex.length; c += 2) {

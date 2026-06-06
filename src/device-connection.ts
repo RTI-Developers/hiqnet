@@ -1,3 +1,9 @@
+enum ConnectionState {
+    Failed = 0,
+    Disconnected = 1,
+    Connected = 2
+}
+
 class DeviceConnection
 {
     private static readonly CONNECT_FAILURE_TIMEOUT_MS: number = 15000;

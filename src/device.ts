@@ -1,29 +1,4 @@
 ﻿class Device {
-	private static readonly DEFAULT_OBJECT_ID: string = '000000';
-	private static readonly DEFAULT_GATEWAY_ADDRESS: string = '00000000';
-	private static readonly DEFAULT_VIRTUAL_DEVICE_ADDRESS: string = '00';
-	private static readonly DHCP_STATIC_IDENTIFIER: string = '00'; // Per spec, 00 = Static IP, 01 = DHCP
-	private static readonly ETHERNET_NETWORK_ID: string = '01';
-	private static readonly FLAG_INFORMATION: number = 0x0004;
-	private static readonly FLAG_GUARANTEED: number = 0x0020;
-	private static readonly FLAG_REQUEST_ACK: number = 0x0001;
-	private static readonly HOP_COUNT_HEX: string = '05';
-	private static readonly MAX_MESSAGE_SIZE: string = '00100000'; // Per spec, but also a common Ethernet MTU size to avoid fragmentation.
-	private static readonly MSGID_DISCO_INFO: string = '0000';
-	private static readonly MSGID_GET_ATTRIBUTES: string = '010d';
-	private static readonly MSGID_GET_VD_LIST: string = '011a';
-	private static readonly MSGID_GOODBYE: string = '0007';
-	private static readonly MSGID_HELLO: string = '0008';
-	private static readonly MSGID_MULTI_PARAM_SET: string = '0100';
-	private static readonly MSGID_MULTI_OBJECT_PARAM_SET: string = '0101';
-	private static readonly MSGID_MULTI_PARAM_SET_PERCENT: string = '0102';
-	private static readonly MSGID_MULTI_PARAM_GET: string = '0103';
-	private static readonly MSGID_MULTI_PARAM_SUBSCRIBE: string = '010f';
-	private static readonly MSGID_MULTI_PARAM_UNSUBSCRIBE: string = '0112';
-	private static readonly MSGID_PARAM_SUBSCRIBE_PERCENT: string = '0111';
-	private static readonly SERIAL_NUMBER_LENGTH: string = '0010';  // UWORD: serial number payload is 16 bytes per spec
-	private static readonly STD_HEADER_LEN: number = 25;
-
 	private readonly _deviceAddress: string;      		 // 4 hex chars
 	private readonly _index: number;
 	private readonly _logger: Logger;
@@ -112,7 +87,7 @@
 		while (this._rxBufferHex.length >= 12) {
 			// Need at least 6 bytes to read message length field (bytes 2-5).
 			const messageSize = hexToUnsignedInt(this._rxBufferHex.substring(4, 12));
-			if (!messageSize || messageSize < Device.STD_HEADER_LEN) {
+			if (!messageSize || messageSize < STD_HEADER_LEN) {
 				this._logger.logError(
 					'Invalid message size (' + messageSize + ') in RX buffer -- flushing.'
 					+ ' Buffer head: ' + this._rxBufferHex.substring(0, 20).toUpperCase(),
@@ -235,24 +210,24 @@
 	//#region Outgoing messages
 
 	private sendDiscoveryQuery() {
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, Device.DEFAULT_OBJECT_ID);
+		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX Discovery query to ' + destAddress.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
 		const payload = this.buildDiscoInfoPayload();
-		const header = this.buildHeader(Device.MSGID_DISCO_INFO, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
+		const header = this.buildHeader(MSGID_DISCO_INFO, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	private sendGoodbye() {
 		// Goodbye payload = Device Address UWORD.
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, Device.DEFAULT_OBJECT_ID);
+		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX Goodbye to ' + destAddress.toUpperCase() + '.', LogInfoLevel.Low, this._loggerContext);
 		const payload = this._deviceAddress.padLeft(4);
-		const header = this.buildHeader(Device.MSGID_GOODBYE, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
+		const header = this.buildHeader(MSGID_GOODBYE, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	private sendDiscoInfoKeepAlive() {
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, Device.DEFAULT_OBJECT_ID);
+		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX DiscoInfo(I) keep-alive to ' + destAddress.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
 		this.sendDiscoInfo(destAddress);
 	}
@@ -260,29 +235,29 @@
 	private buildDiscoInfoPayload(): string {
 		let payload = this._sourceDeviceAddress;	// Source Device Address
 		payload += '01';							// Cost (1 = direct connection to controller)		
-		payload += Device.SERIAL_NUMBER_LENGTH;
+		payload += SERIAL_NUMBER_LENGTH;
 		payload += this._sourceSerialNumber;		// Serial number (16 bytes per spec)
-		payload += Device.MAX_MESSAGE_SIZE;
+		payload += MAX_MESSAGE_SIZE;
 		payload += '2710';
-		payload += Device.ETHERNET_NETWORK_ID;
+		payload += ETHERNET_NETWORK_ID;
 		payload += this._sourceMacAddress;
-		payload += Device.DHCP_STATIC_IDENTIFIER;
+		payload += DHCP_STATIC_IDENTIFIER;
 		payload += this._controllerIpHex;
 		payload += this._controllerNetMask;
-		payload += Device.DEFAULT_GATEWAY_ADDRESS;
+		payload += DEFAULT_GATEWAY_ADDRESS;
 		return payload;
 	}
 
 	private sendDiscoInfo(destAddress: string) {
 		const payload = this.buildDiscoInfoPayload();
-		const flags = Device.FLAG_GUARANTEED | Device.FLAG_INFORMATION;
-		const header = this.buildHeader(Device.MSGID_DISCO_INFO, destAddress, payload.length / 2, flags);
+		const flags = FLAG_GUARANTEED | FLAG_INFORMATION;
+		const header = this.buildHeader(MSGID_DISCO_INFO, destAddress, payload.length / 2, flags);
 		this.transmit(header + payload);
 	}
 
 
 	private handleDiscoInfo(flags: number, sourceAddress: string, payload: string) {
-		const isInfo = (flags & Device.FLAG_INFORMATION) != 0;
+		const isInfo = (flags & FLAG_INFORMATION) != 0;
 
 		// Parse the sender's IP from the DiscoInfo payload for logging.
 		// Structure: Device(UWORD=4) + Cost(UBYTE=2) + Serial(BLOCK: UWORD len + data) +
@@ -396,7 +371,7 @@
 			let payload = '';
 			payload += params.length.toString(16).padLeft(4);  // Num_Subscriptions
 
-			const subscriberAddress = this.createFullAddress(this._sourceDeviceAddress, Device.DEFAULT_VIRTUAL_DEVICE_ADDRESS, Device.DEFAULT_OBJECT_ID);
+			const subscriberAddress = this.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 			for (let j = 0; j < params.length; j++) {
 				const p = params[j];
 				payload += p.Id;               // Publisher_Param_ID (UWORD)
@@ -411,7 +386,7 @@
 				'TX MultiParamSubscribe ' + params.length + ' param(s) to obj=0x' + destDisplay.toUpperCase(),
 				LogInfoLevel.High, this._loggerContext
 			);
-			const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SUBSCRIBE, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
+			const header = this.buildHeader(MSGID_MULTI_PARAM_SUBSCRIBE, destAddress, payload.length / 2, FLAG_GUARANTEED);
 			this.transmit(header + payload);
 			totalCount += params.length;
 		}
@@ -428,8 +403,8 @@
 			LogInfoLevel.Low, this._loggerContext
 		);
 
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, Device.DEFAULT_OBJECT_ID);
-		const subscriberAddress = this.createFullAddress(this._sourceDeviceAddress, Device.DEFAULT_VIRTUAL_DEVICE_ADDRESS, Device.DEFAULT_OBJECT_ID);
+		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const subscriberAddress = this.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 		
 		let payload = '';
 		payload += subscriberAddress;                              // Subscriber Address (HIQNETADDR)
@@ -441,7 +416,7 @@
 			payload += p.Id;          // Subscriber_Param_ID (UWORD)
 		}
 
-		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_UNSUBSCRIBE, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
+		const header = this.buildHeader(MSGID_MULTI_PARAM_UNSUBSCRIBE, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
@@ -472,7 +447,7 @@
 				'TX MultiParamGet ' + params.length + ' param(s) to obj=0x' + destDisplay.toUpperCase(),
 				LogInfoLevel.High, this._loggerContext
 			);
-			const header = this.buildHeader(Device.MSGID_MULTI_PARAM_GET, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
+			const header = this.buildHeader(MSGID_MULTI_PARAM_GET, destAddress, payload.length / 2, FLAG_GUARANTEED);
 			this.transmit(header + payload);
 			totalCount += params.length;
 		}
@@ -494,7 +469,7 @@
 		payload += parameter.Id;                        // Param_ID UWORD
 		payload += parameter.DataType;                  // DataType UBYTE
 		payload += hexValue;                            // Value
-		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SET, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
+		const header = this.buildHeader(MSGID_MULTI_PARAM_SET, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
@@ -512,14 +487,14 @@
 		let payload = '0001';                           // NumPARAM UWORD
 		payload += parameter.Id;                        // PARAM_ID UWORD
 		payload += value;                               // PARAM_Value UWORD (1.15 fixed-point)
-		const header = this.buildHeader(Device.MSGID_MULTI_PARAM_SET_PERCENT, destAddress, payload.length / 2, Device.FLAG_GUARANTEED);
+		const header = this.buildHeader(MSGID_MULTI_PARAM_SET_PERCENT, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	//#region Manual debugging helpers
 
 	private sendGetAttributes(attributeIds: number[]) {
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, Device.DEFAULT_OBJECT_ID);
+		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 
 		let payload = '';
 		payload += attributeIds.length.toString(16).padLeft(4);  // Num_Attributes (UWORD)
@@ -527,8 +502,8 @@
 			payload += attrId.toString(16).padLeft(4);           // Attribute_ID[] (UWORD each)
 		}
 
-		const flags = Device.FLAG_GUARANTEED;
-		const header = this.buildHeader(Device.MSGID_GET_ATTRIBUTES, destAddress, payload.length / 2, flags);
+		const flags = FLAG_GUARANTEED;
+		const header = this.buildHeader(MSGID_GET_ATTRIBUTES, destAddress, payload.length / 2, flags);
 		this.transmit(header + payload);
 
 		this._logger.logInfo(
@@ -542,8 +517,8 @@
 	private sendGetVDList() {
 		const destAddress = 'FFFF00000000'; // Broadcast address per HiQnet spec s.8.7
 		const payload = '00';                // Root Virtual Device index
-		const flags = Device.FLAG_GUARANTEED;
-		const header = this.buildHeader(Device.MSGID_GET_VD_LIST, destAddress, payload.length / 2, flags);
+		const flags = FLAG_GUARANTEED;
+		const header = this.buildHeader(MSGID_GET_VD_LIST, destAddress, payload.length / 2, flags);
 		this.transmit(header + payload);
 
 		this._logger.logInfo('TX GetVDList broadcast to ' + destAddress.toUpperCase(), LogInfoLevel.High, this._loggerContext);
@@ -561,17 +536,17 @@
 	//#endregion
 
 	private buildHeader(messageId: string, destAddress: string, payloadByteLen: number, flagsBits: number): string {
-		const totalLen = Device.STD_HEADER_LEN + payloadByteLen;
-		const sourceAddress = this.createFullAddress(this._sourceDeviceAddress, Device.DEFAULT_VIRTUAL_DEVICE_ADDRESS, Device.DEFAULT_OBJECT_ID);
+		const totalLen = STD_HEADER_LEN + payloadByteLen;
+		const sourceAddress = this.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 
 		let header = this._protocolVersionHex;
-		header += Device.STD_HEADER_LEN.toString(16).padLeft(2);
+		header += STD_HEADER_LEN.toString(16).padLeft(2);
 		header += totalLen.toString(16).padLeft(8);
 		header += sourceAddress;
 		header += destAddress;
 		header += messageId;
 		header += flagsBits.toString(16).padLeft(4);
-		header += Device.HOP_COUNT_HEX;
+		header += HOP_COUNT;
 		header += '0000';
 
 		return header;
@@ -593,7 +568,7 @@
 	//#region Incoming message processing
 
 	private processMessage(messageHex: string) {
-		if (messageHex.length < Device.STD_HEADER_LEN * 2) return;
+		if (messageHex.length < STD_HEADER_LEN * 2) return;
 
 		const protocolVersionHex = messageHex.substring(0, 2);
 		if (protocolVersionHex != this._protocolVersionHex) {
@@ -655,17 +630,17 @@
 		}
 
 		switch (messageIdHex) {
-			case Device.MSGID_DISCO_INFO: /* Discovery */
+			case MSGID_DISCO_INFO: /* Discovery */
 				this.handleDiscoInfo(flags, sourceAddress, effectivePayload);
 				break;
-			case Device.MSGID_GOODBYE: /* Goodbye */
+			case MSGID_GOODBYE: /* Goodbye */
 				this._logger.logInfo('Received Goodbye from device.', LogInfoLevel.Low, this._loggerContext);
 				break;
-			case Device.MSGID_HELLO: /* Hello */
+			case MSGID_HELLO: /* Hello */
 				this._logger.logInfo('Received Hello from device.', LogInfoLevel.High, this._loggerContext);
 				this.handleHello(sourceAddress);
 				break;
-			case Device.MSGID_MULTI_PARAM_SET: /* MultiParamSet -- subscription push notification or get response */
+			case MSGID_MULTI_PARAM_SET: /* MultiParamSet -- subscription push notification or get response */
 				this._logger.logInfo(
 					'RX MultiParamSet (0x0100) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
 					+ ' src=' + sourceAddress.toUpperCase(),
@@ -679,7 +654,7 @@
 					this.handleMultiParamSet(effectivePayload, srcObj !== '000000' ? srcObj : null);
 				}
 				break;
-			case Device.MSGID_MULTI_OBJECT_PARAM_SET: /* MultiObjectParamSet -- subscription push notification */
+			case MSGID_MULTI_OBJECT_PARAM_SET: /* MultiObjectParamSet -- subscription push notification */
 				this._logger.logInfo(
 					'RX MultiObjectParamSet (0x0101) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
 					+ ' src=' + sourceAddress.toUpperCase()
@@ -689,15 +664,15 @@
 				);
 				this.handleMultiObjectParamSet(effectivePayload);
 				break;
-			case Device.MSGID_MULTI_PARAM_GET: /* MultiParamGet response */
-				if ((flags & (Device.FLAG_INFORMATION | Device.FLAG_REQUEST_ACK)) != 0) {
+			case MSGID_MULTI_PARAM_GET: /* MultiParamGet response */
+				if ((flags & (FLAG_INFORMATION | FLAG_REQUEST_ACK)) != 0) {
 					this._logger.logInfo('Received MultiParamGet response (0x0103).', LogInfoLevel.High, this._loggerContext);
 					const srcObj103 = sourceAddress.substring(6, 12);
 					this.handleMultiParamSet(effectivePayload, srcObj103 !== '000000' ? srcObj103 : null);
 				}
 				break;
-			case Device.MSGID_GET_ATTRIBUTES: /* GetAttributes response */
-				if ((flags & Device.FLAG_INFORMATION) != 0) {
+			case MSGID_GET_ATTRIBUTES: /* GetAttributes response */
+				if ((flags & FLAG_INFORMATION) != 0) {
 					this._logger.logInfo(
 						'RX GetAttributes(I) from ' + sourceAddress.toUpperCase()
 						+ ' payloadBytes=' + (effectivePayload.length / 2),
@@ -724,7 +699,7 @@
 							this._loggerContext
 						);
 					}
-				} else if ((flags & Device.FLAG_REQUEST_ACK) != 0) {
+				} else if ((flags & FLAG_REQUEST_ACK) != 0) {
 					this._logger.logInfo(
 						'RX GetAttributes ACK from ' + sourceAddress.toUpperCase(),
 						LogInfoLevel.High,
@@ -738,7 +713,7 @@
 					);
 				}
 				break;
-			case Device.MSGID_MULTI_PARAM_SET_PERCENT: /* ParamSetPercent -- subscription push or ACK response */
+			case MSGID_MULTI_PARAM_SET_PERCENT: /* ParamSetPercent -- subscription push or ACK response */
 				this._logger.logInfo(
 					'RX ParamSetPercent (0x0102) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
 					+ ' src=' + sourceAddress.toUpperCase()
@@ -781,7 +756,7 @@
 					}
 				}
 				break;
-			case Device.MSGID_PARAM_SUBSCRIBE_PERCENT: /* ParamSubscribePercent -- subscription push notification */
+			case MSGID_PARAM_SUBSCRIBE_PERCENT: /* ParamSubscribePercent -- subscription push notification */
 				this._logger.logInfo(
 					'RX ParamSubscribePercent (0x0111) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
 					+ ' src=' + sourceAddress.toUpperCase()
@@ -834,18 +809,18 @@
 		// Per HiQnet spec: refuse session by sending Hello with Error extension.
 		// Flags = 0x002C (Guaranteed + Error + Information).
 		// Payload = errorExtension block (errorCode=UWORD, strByteCount=UWORD) = 4 bytes.
-		const flags = Device.FLAG_GUARANTEED | Device.FLAG_REQUEST_ACK | Device.FLAG_INFORMATION; // 0x002C
-		const totalLen = Device.STD_HEADER_LEN + 4;
-		const sourceAddress = this.createFullAddress(this._sourceDeviceAddress, Device.DEFAULT_VIRTUAL_DEVICE_ADDRESS, Device.DEFAULT_OBJECT_ID);
+		const flags = FLAG_GUARANTEED | FLAG_REQUEST_ACK | FLAG_INFORMATION; // 0x002C
+		const totalLen = STD_HEADER_LEN + 4;
+		const sourceAddress = this.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 
 		let header = this._protocolVersionHex;
-		header += Device.STD_HEADER_LEN.toString(16).padLeft(2);               // headerLen = 25
+		header += STD_HEADER_LEN.toString(16).padLeft(2);               // headerLen = 25
 		header += totalLen.toString(16).padLeft(8);                            // messageLen = 29
 		header += destAddress;                                                 // dest address
 		header += sourceAddress;                                      		   // source address
-		header += Device.MSGID_HELLO;                                          // msgId
+		header += MSGID_HELLO;                                          // msgId
 		header += flags.toString(16).padLeft(4);                               // flags = 0x002C
-		header += Device.HOP_COUNT_HEX;                                        // hop count
+		header += HOP_COUNT;                                        // hop count
 		header += '0000';                                                      // seqNum
 
 		this.transmit(header + '0000' + '0000'); // errorCode=0, strByteCount=0

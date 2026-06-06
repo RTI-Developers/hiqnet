@@ -16,10 +16,12 @@
     "./src/utils.ts",
     "./node_modules/@rti-developers/sdk-utils/src/logger.ts",
     "./node_modules/@rti-developers/sdk-utils/src/global-handle-map.ts",
-    "./src/parameter.ts",
-    "./src/connectionState.ts",
-    "./src/deviceConnection.ts",
+    "./src/utils.ts",
+    "./src/device-connection.ts",
     "./src/device.ts",
     "./src/index.ts"
   ],
+  "include": [
+    "./src/typings/**/*d.ts",
+  ]
 }
