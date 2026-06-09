@@ -215,48 +215,53 @@
 	//#region Outgoing messages
 
 	private sendDiscoveryQuery() {
-		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX Discovery query to ' + destAddress.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
-		const payload = this.buildDiscoInfoPayload();
-		const header = this.buildHeader(HiQnetMessageId.DISCO_INFO, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const payload = HiQnetProtocolBuilder.buildDiscoInfoPayload(
+			this._sourceDeviceAddress,
+			this._sourceMacAddress,
+			this._sourceSerialNumber,
+			this._controllerIpHex,
+			this._controllerNetMask
+		);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.DISCO_INFO, payload.length / 2, FLAG_GUARANTEED
+		);
 		this.transmit(header + payload);
 	}
 
 	private sendGoodbye() {
 		// Goodbye payload = Device Address UWORD.
-		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX Goodbye to ' + destAddress.toUpperCase() + '.', LogInfoLevel.Low, this._loggerContext);
 		const payload = this._deviceAddress.padLeft(4);
-		const header = this.buildHeader(HiQnetMessageId.GOODBYE, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.GOODBYE, payload.length / 2, FLAG_GUARANTEED
+		);
 		this.transmit(header + payload);
 	}
 
 	private sendDiscoInfoKeepAlive() {
-		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX DiscoInfo(I) keep-alive to ' + destAddress.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
 		this.sendDiscoInfo(destAddress);
 	}
 
-	private buildDiscoInfoPayload(): string {
-		let payload = this._sourceDeviceAddress;	// Source Device Address
-		payload += '01';							// Cost (1 = direct connection to controller)		
-		payload += SERIAL_NUMBER_LENGTH;
-		payload += this._sourceSerialNumber;		// Serial number (16 bytes per spec)
-		payload += MAX_MESSAGE_SIZE;
-		payload += '2710';
-		payload += ETHERNET_NETWORK_ID;
-		payload += this._sourceMacAddress;
-		payload += DHCP_STATIC_IDENTIFIER;
-		payload += this._controllerIpHex;
-		payload += this._controllerNetMask;
-		payload += DEFAULT_GATEWAY_ADDRESS;
-		return payload;
-	}
-
 	private sendDiscoInfo(destAddress: string) {
-		const payload = this.buildDiscoInfoPayload();
+		const payload = HiQnetProtocolBuilder.buildDiscoInfoPayload(
+			this._sourceDeviceAddress,
+			this._sourceMacAddress,
+			this._sourceSerialNumber,
+			this._controllerIpHex,
+			this._controllerNetMask
+		);
 		const flags = FLAG_GUARANTEED | FLAG_INFORMATION;
-		const header = this.buildHeader(HiQnetMessageId.DISCO_INFO, destAddress, payload.length / 2, flags);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.DISCO_INFO, payload.length / 2, flags
+		);
 		this.transmit(header + payload);
 	}
 
@@ -341,34 +346,27 @@
 		const grouped: { [key: string]: Parameter[] } = {};
 		for (let i = 0; i < subParams.length; i++) {
 			const p = subParams[i];
-			const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
+			const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
 			if (!(destAddress in grouped)) grouped[destAddress] = [];
 			grouped[destAddress].push(p);
 		}
 
 		let totalCount = 0;
+		const subscriberAddress = HiQnetProtocolBuilder.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 		for (const destAddress in grouped) {
 			const params = grouped[destAddress];
-			const destDisplay = params[0].ObjectAddress;
-			let payload = '';
-			payload += params.length.toString(16).padLeft(4);  // Num_Subscriptions
 
-			const subscriberAddress = HiQnetUtils.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
-			for (let j = 0; j < params.length; j++) {
-				const p = params[j];
-				payload += p.Id;               // Publisher_Param_ID (UWORD)
-				payload += '00';               // Subscription_Type: 0
-				payload += subscriberAddress;  // Subscriber_Address (6 bytes)
-				payload += p.Id;               // Subscriber_Param_ID (UWORD)
-				payload += '000000';           // Reserved (3 bytes = 2 + 1 per spec)
-				payload += '0032';             // Sensor_Rate: 50ms
-			}
+			const paramIds = params.map(p => p.Id);
+			const payload = HiQnetProtocolBuilder.buildMultiParamSubscribePayload(subscriberAddress, paramIds);
 
 			this._logger.logInfo(
-				'TX MultiParamSubscribe ' + params.length + ' param(s) to obj=0x' + destDisplay.toUpperCase(),
+				'TX MultiParamSubscribe ' + params.length + ' param(s) to obj=0x' + params[0].ObjectAddress.toUpperCase(),
 				LogInfoLevel.High, this._loggerContext
 			);
-			const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_SUBSCRIBE, destAddress, payload.length / 2, FLAG_GUARANTEED);
+			const header = HiQnetProtocolBuilder.buildHeader(
+				this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+				HiQnetMessageId.MULTI_PARAM_SUBSCRIBE, payload.length / 2, FLAG_GUARANTEED
+			);
 			this.transmit(header + payload);
 			totalCount += params.length;
 		}
@@ -385,20 +383,16 @@
 			LogInfoLevel.Low, this._loggerContext
 		);
 
-		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
-		const subscriberAddress = HiQnetUtils.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const subscriberAddress = HiQnetProtocolBuilder.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 		
-		let payload = '';
-		payload += subscriberAddress;                              // Subscriber Address (HIQNETADDR)
-		payload += parameters.length.toString(16).padLeft(4);      // Num_Subscriptions (UWORD)
-		
-		for (let i = 0; i < parameters.length; i++) {
-			const p = parameters[i];
-			payload += p.Id;          // Publisher_Param_ID (UWORD)
-			payload += p.Id;          // Subscriber_Param_ID (UWORD)
-		}
+		const paramIds = parameters.map(p => p.Id);
+		const payload = HiQnetProtocolBuilder.buildMultiParamUnsubscribePayload(subscriberAddress, paramIds);
 
-		const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_UNSUBSCRIBE, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.MULTI_PARAM_UNSUBSCRIBE, payload.length / 2, FLAG_GUARANTEED
+		);
 		this.transmit(header + payload);
 	}
 
@@ -409,7 +403,7 @@
 		const grouped: { [key: string]: Parameter[] } = {};
 		for (let i = 0; i < parameters.length; i++) {
 			const p = parameters[i];
-			const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
+			const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
 			if (!(destAddress in grouped)) grouped[destAddress] = [];
 			grouped[destAddress].push(p);
 		}
@@ -417,19 +411,18 @@
 		let totalCount = 0;
 		for (const destAddress in grouped) {
 			const params = grouped[destAddress];
-			const destDisplay = params[0].ObjectAddress;
-			let payload = '';
-			payload += params.length.toString(16).padLeft(4);  // Num_Parameters
 
-			for (let j = 0; j < params.length; j++) {
-				payload += params[j].Id;  // Parameter_ID (UWORD) each
-			}
+			const paramIds = params.map(p => p.Id);
+			const payload = HiQnetProtocolBuilder.buildMultiParamGetPayload(paramIds);
 
 			this._logger.logInfo(
-				'TX MultiParamGet ' + params.length + ' param(s) to obj=0x' + destDisplay.toUpperCase(),
+				'TX MultiParamGet ' + params.length + ' param(s) to obj=0x' + params[0].ObjectAddress.toUpperCase(),
 				LogInfoLevel.High, this._loggerContext
 			);
-			const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_GET, destAddress, payload.length / 2, FLAG_GUARANTEED);
+			const header = HiQnetProtocolBuilder.buildHeader(
+				this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+				HiQnetMessageId.MULTI_PARAM_GET, payload.length / 2, FLAG_GUARANTEED
+			);
 			this.transmit(header + payload);
 			totalCount += params.length;
 		}
@@ -438,7 +431,7 @@
 	}
 
 	private sendMultiParamSet(parameter: Parameter, hexValue: string) {
-		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, parameter.ObjectAddress);
+		const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, parameter.ObjectAddress);
 		this._logger.logInfo(
 			'TX MultiParamSet "' + parameter.Name + '"'
 			+ ' paramId=0x' + parameter.Id.toUpperCase()
@@ -447,16 +440,16 @@
 			LogInfoLevel.High,
 			this._loggerContext
 		);
-		let payload = '0001';                           		// NumParam UWORD
-		payload += parameter.Id;                        		// Param_ID UWORD
-		payload += parameter.DataType.toString(16).padLeft(2);  // DataType UBYTE
-		payload += hexValue;                            		// Value
-		const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_SET, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const payload = HiQnetProtocolBuilder.buildMultiParamSetPayload(parameter.Id, parameter.DataType, hexValue);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.MULTI_PARAM_SET, payload.length / 2, FLAG_GUARANTEED
+		);
 		this.transmit(header + payload);
 	}
 
 	private sendMultiParamSetPercent(parameter: Parameter, hexValueUword: string) {
-		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, parameter.ObjectAddress);
+		const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, parameter.ObjectAddress);
 		const value = hexValueUword.length == 4 ? hexValueUword : hexValueUword.padLeft(4);
 		this._logger.logInfo(
 			'TX ParamSetPercent "' + parameter.Name + '"'
@@ -466,26 +459,24 @@
 			LogInfoLevel.High,
 			this._loggerContext
 		);
-		let payload = '0001';                           // NumPARAM UWORD
-		payload += parameter.Id;                        // PARAM_ID UWORD
-		payload += value;                               // PARAM_Value UWORD (1.15 fixed-point)
-		const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_SET_PERCENT, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const payload = HiQnetProtocolBuilder.buildMultiParamSetPercentPayload(parameter.Id, value);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.MULTI_PARAM_SET_PERCENT, payload.length / 2, FLAG_GUARANTEED
+		);
 		this.transmit(header + payload);
 	}
 
 	//#region Manual debugging helpers
 
 	private sendGetAttributes(attributeIds: number[]) {
-		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetProtocolBuilder.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 
-		let payload = '';
-		payload += attributeIds.length.toString(16).padLeft(4);  // Num_Attributes (UWORD)
-		for (const attrId of attributeIds) {
-			payload += attrId.toString(16).padLeft(4);           // Attribute_ID[] (UWORD each)
-		}
-
-		const flags = FLAG_GUARANTEED;
-		const header = this.buildHeader(HiQnetMessageId.GET_ATTRIBUTES, destAddress, payload.length / 2, flags);
+		const payload = HiQnetProtocolBuilder.buildGetAttributesPayload(attributeIds);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.GET_ATTRIBUTES, payload.length / 2, FLAG_GUARANTEED
+		);
 		this.transmit(header + payload);
 
 		this._logger.logInfo(
@@ -499,8 +490,10 @@
 	private sendGetVDList() {
 		const destAddress = BROADCAST_ADDRESS;
 		const payload = DEFAULT_VIRTUAL_DEVICE_ADDRESS;  // Root Virtual Device index
-		const flags = FLAG_GUARANTEED;
-		const header = this.buildHeader(HiQnetMessageId.GET_VD_LIST, destAddress, payload.length / 2, flags);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.GET_VD_LIST, payload.length / 2, FLAG_GUARANTEED
+		);
 		this.transmit(header + payload);
 
 		this._logger.logInfo('TX GetVDList broadcast to ' + destAddress.toUpperCase(), LogInfoLevel.High, this._loggerContext);
@@ -516,23 +509,6 @@
 	}
 
 	//#endregion
-
-	private buildHeader(messageId: HiQnetMessageId, destAddress: string, payloadByteLen: number, flagsBits: number): string {
-		const totalLen = STD_HEADER_LEN + payloadByteLen;
-		const sourceAddress = HiQnetUtils.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
-
-		let header = this._protocolVersionHex;
-		header += STD_HEADER_LEN.toString(16).padLeft(2);
-		header += totalLen.toString(16).padLeft(8);
-		header += sourceAddress;
-		header += destAddress;
-		header += messageId.toString(16).padLeft(4);
-		header += flagsBits.toString(16).padLeft(4);
-		header += HOP_COUNT;
-		header += '0000';	// Sequence number (can be 0 for our purposes since we don't use ACKs or retries)
-
-		return header;
-	}
 
 	private transmit(messageHex: string) {
 		const clean = messageHex.cleanHex();
@@ -772,7 +748,10 @@
 		// Flags = 0x002C (Guaranteed + Error + Information).
 		// Payload = errorExtension block (errorCode=UWORD, strByteCount=UWORD) = 4 bytes.
 		const flags = FLAG_GUARANTEED | FLAG_REQUEST_ACK | FLAG_INFORMATION; // 0x002C
-		const header = this.buildHeader(HiQnetMessageId.HELLO, destAddress, 4, flags);
+		const header = HiQnetProtocolBuilder.buildHeader(
+			this._protocolVersionHex, destAddress, this._sourceDeviceAddress,
+			HiQnetMessageId.HELLO, 4, flags
+		);
 
 		this.transmit(header + '0000' + '0000'); // errorCode=0, strByteCount=0
 	}

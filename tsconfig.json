@@ -19,6 +19,7 @@
     "./src/utils.ts",
     "./src/hiqnet-constants.ts",
     "./src/hiqnet-utils.ts",
+    "./src/hiqnet-builder.ts",
     "./src/device-connection.ts",
     "./src/device.ts",
     "./src/index.ts"

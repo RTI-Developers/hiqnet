@@ -131,8 +131,4 @@ class HiQnetUtils {
 		}
 		return parts.join('.');
 	}
-
-    public static createFullAddress(deviceAddress: string, virtualDeviceAddress: string, objectId: string): string {
-		return deviceAddress.padLeft(4) + virtualDeviceAddress.padLeft(2) + objectId.padLeft(6);
-	}
 }
