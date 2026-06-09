@@ -48,7 +48,6 @@
 		this._sourceSerialNumber = this._sourceMacAddress.padLeft(32);
 
 		this.refreshControllerIp();
-
 		this.initSystemVars();
 
 		this._pollingEvent = new ScheduledEvent(onPollingEventElapsed, 'Periodic', 'Seconds', pollingIntervalSec);
@@ -63,7 +62,7 @@
 			+ ' srcSerialNum=' + this._sourceSerialNumber.toUpperCase()
 			+ ' deviceAddress' + this._deviceAddress.toUpperCase()
 			+ ' virtualDeviceAddress=' + this._virtualDeviceAddress.toUpperCase()
-			+ ' controllerIp=' + this.hexToIpString(this._controllerIpHex)
+			+ ' controllerIp=' + HiQnetUtils.hexToIpString(this._controllerIpHex)
 			+ ' protocolVer=0x' + this._protocolVersionHex.toUpperCase()
 			+ ' pollIntervalSec=' + pollingIntervalSec
 			+ ' parameterCount=' + (parameters.length - 1),
@@ -110,7 +109,17 @@
 
 			const messageHex = this._rxBufferHex.substring(0, messageHexLen);
 			this._rxBufferHex = this._rxBufferHex.substring(messageHexLen);
-			this.processMessage(messageHex);
+
+			try {
+				const message: HiQnetMessage = HiQnetUtils.parseMessage(messageHex, this._protocolVersionHex);
+				this.processMessage(message);
+			} catch (err) {
+				const errorMessage = (err instanceof Error) ? err.message : String(err);
+				this._logger.logError(
+					'Error parsing message: ' + errorMessage,
+					this._loggerContext
+				);
+			}
 		}
 	}
 
@@ -187,7 +196,7 @@
 		}
 
 		// Echo locally so the UI reflects the change immediately.
-		this.updateParameterValueVariable(parameter, hexValue);
+		this.updateParameterValue(parameter, hexValue);
 	}
 
 	public Shutdown() {
@@ -203,31 +212,27 @@
 		this.Connection.shutdown();
 	}
 
-	private createFullAddress(deviceAddress: string, virtualDeviceAddress: string, objectId: string): string {
-		return deviceAddress.padLeft(4) + virtualDeviceAddress.padLeft(2) + objectId.padLeft(6);
-	}
-
 	//#region Outgoing messages
 
 	private sendDiscoveryQuery() {
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX Discovery query to ' + destAddress.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
 		const payload = this.buildDiscoInfoPayload();
-		const header = this.buildHeader(MSGID_DISCO_INFO, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const header = this.buildHeader(HiQnetMessageId.DISCO_INFO, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	private sendGoodbye() {
 		// Goodbye payload = Device Address UWORD.
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX Goodbye to ' + destAddress.toUpperCase() + '.', LogInfoLevel.Low, this._loggerContext);
 		const payload = this._deviceAddress.padLeft(4);
-		const header = this.buildHeader(MSGID_GOODBYE, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const header = this.buildHeader(HiQnetMessageId.GOODBYE, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	private sendDiscoInfoKeepAlive() {
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 		this._logger.logInfo('TX DiscoInfo(I) keep-alive to ' + destAddress.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
 		this.sendDiscoInfo(destAddress);
 	}
@@ -251,10 +256,9 @@
 	private sendDiscoInfo(destAddress: string) {
 		const payload = this.buildDiscoInfoPayload();
 		const flags = FLAG_GUARANTEED | FLAG_INFORMATION;
-		const header = this.buildHeader(MSGID_DISCO_INFO, destAddress, payload.length / 2, flags);
+		const header = this.buildHeader(HiQnetMessageId.DISCO_INFO, destAddress, payload.length / 2, flags);
 		this.transmit(header + payload);
 	}
-
 
 	private handleDiscoInfo(flags: number, sourceAddress: string, payload: string) {
 		const isInfo = (flags & FLAG_INFORMATION) != 0;
@@ -271,7 +275,7 @@
 				if (networkId === 1) {
 					const ipOffset = networkIdOffset + 2 + 12 + 2;
 					if (payload.length >= ipOffset + 8) {
-						senderIp = this.hexToIpString(payload.substring(ipOffset, ipOffset + 8));
+						senderIp = HiQnetUtils.hexToIpString(payload.substring(ipOffset, ipOffset + 8));
 					}
 				}
 			}
@@ -314,39 +318,17 @@
 	}
 
 	private refreshControllerIp() {
-		const resolved = this.parseIpToHex(System.IPAddress).padLeft(8);
+		const resolved = HiQnetUtils.parseIpToHex(System.IPAddress).padLeft(8);
 
 		if (resolved !== this._controllerIpHex) {
 			this._controllerIpHex = resolved;
-			this._controllerNetMask = this.parseIpToHex(System.IPNetMask).padLeft(8);
+			this._controllerNetMask = HiQnetUtils.parseIpToHex(System.IPNetMask).padLeft(8);
 			this._logger.logInfo(
-				'Controller IP resolved to ' + this.hexToIpString(this._controllerIpHex) + ' with netmask ' + this.hexToIpString(this._controllerNetMask) + '.',
+				'Controller IP resolved to ' + HiQnetUtils.hexToIpString(this._controllerIpHex) + ' with netmask ' + HiQnetUtils.hexToIpString(this._controllerNetMask) + '.',
 				LogInfoLevel.Low,
 				this._loggerContext
 			);
 		}
-	}
-
-	private parseIpToHex(ipStr: string): string {
-		if (!ipStr) return '00000000';
-		const parts = ipStr.split('.');
-		if (parts.length !== 4) return '00000000';
-		let hex = '';
-		for (let i = 0; i < 4; i++) {
-			const n = parseInt(parts[i], 10);
-			if (isNaN(n) || n < 0 || n > 255) return '00000000';
-			hex += n.toString(16).padLeft(2);
-		}
-		return hex;
-	}
-
-	private hexToIpString(hex: string): string {
-		if (!hex || hex.length < 8) return '';
-		const parts: string[] = [];
-		for (let i = 0; i < 8; i += 2) {
-			parts.push(hexToUnsignedInt(hex.substring(i, i + 2)).toString(10));
-		}
-		return parts.join('.');
 	}
 
 	private sendMultiParamSubscribe() {
@@ -359,7 +341,7 @@
 		const grouped: { [key: string]: Parameter[] } = {};
 		for (let i = 0; i < subParams.length; i++) {
 			const p = subParams[i];
-			const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
+			const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
 			if (!(destAddress in grouped)) grouped[destAddress] = [];
 			grouped[destAddress].push(p);
 		}
@@ -371,7 +353,7 @@
 			let payload = '';
 			payload += params.length.toString(16).padLeft(4);  // Num_Subscriptions
 
-			const subscriberAddress = this.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
+			const subscriberAddress = HiQnetUtils.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 			for (let j = 0; j < params.length; j++) {
 				const p = params[j];
 				payload += p.Id;               // Publisher_Param_ID (UWORD)
@@ -386,7 +368,7 @@
 				'TX MultiParamSubscribe ' + params.length + ' param(s) to obj=0x' + destDisplay.toUpperCase(),
 				LogInfoLevel.High, this._loggerContext
 			);
-			const header = this.buildHeader(MSGID_MULTI_PARAM_SUBSCRIBE, destAddress, payload.length / 2, FLAG_GUARANTEED);
+			const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_SUBSCRIBE, destAddress, payload.length / 2, FLAG_GUARANTEED);
 			this.transmit(header + payload);
 			totalCount += params.length;
 		}
@@ -403,8 +385,8 @@
 			LogInfoLevel.Low, this._loggerContext
 		);
 
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
-		const subscriberAddress = this.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const subscriberAddress = HiQnetUtils.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 		
 		let payload = '';
 		payload += subscriberAddress;                              // Subscriber Address (HIQNETADDR)
@@ -416,7 +398,7 @@
 			payload += p.Id;          // Subscriber_Param_ID (UWORD)
 		}
 
-		const header = this.buildHeader(MSGID_MULTI_PARAM_UNSUBSCRIBE, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_UNSUBSCRIBE, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
@@ -427,7 +409,7 @@
 		const grouped: { [key: string]: Parameter[] } = {};
 		for (let i = 0; i < parameters.length; i++) {
 			const p = parameters[i];
-			const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
+			const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, p.ObjectAddress);
 			if (!(destAddress in grouped)) grouped[destAddress] = [];
 			grouped[destAddress].push(p);
 		}
@@ -447,7 +429,7 @@
 				'TX MultiParamGet ' + params.length + ' param(s) to obj=0x' + destDisplay.toUpperCase(),
 				LogInfoLevel.High, this._loggerContext
 			);
-			const header = this.buildHeader(MSGID_MULTI_PARAM_GET, destAddress, payload.length / 2, FLAG_GUARANTEED);
+			const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_GET, destAddress, payload.length / 2, FLAG_GUARANTEED);
 			this.transmit(header + payload);
 			totalCount += params.length;
 		}
@@ -456,25 +438,25 @@
 	}
 
 	private sendMultiParamSet(parameter: Parameter, hexValue: string) {
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, parameter.ObjectAddress);
+		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, parameter.ObjectAddress);
 		this._logger.logInfo(
 			'TX MultiParamSet "' + parameter.Name + '"'
 			+ ' paramId=0x' + parameter.Id.toUpperCase()
-			+ ' dataType=' + hexToUnsignedInt(parameter.DataType)
+			+ ' dataType=' + parameter.DataType
 			+ ' value=0x' + hexValue.toUpperCase(),
 			LogInfoLevel.High,
 			this._loggerContext
 		);
-		let payload = '0001';                           // NumParam UWORD
-		payload += parameter.Id;                        // Param_ID UWORD
-		payload += parameter.DataType;                  // DataType UBYTE
-		payload += hexValue;                            // Value
-		const header = this.buildHeader(MSGID_MULTI_PARAM_SET, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		let payload = '0001';                           		// NumParam UWORD
+		payload += parameter.Id;                        		// Param_ID UWORD
+		payload += parameter.DataType.toString(16).padLeft(2);  // DataType UBYTE
+		payload += hexValue;                            		// Value
+		const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_SET, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	private sendMultiParamSetPercent(parameter: Parameter, hexValueUword: string) {
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, parameter.ObjectAddress);
+		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, parameter.ObjectAddress);
 		const value = hexValueUword.length == 4 ? hexValueUword : hexValueUword.padLeft(4);
 		this._logger.logInfo(
 			'TX ParamSetPercent "' + parameter.Name + '"'
@@ -487,14 +469,14 @@
 		let payload = '0001';                           // NumPARAM UWORD
 		payload += parameter.Id;                        // PARAM_ID UWORD
 		payload += value;                               // PARAM_Value UWORD (1.15 fixed-point)
-		const header = this.buildHeader(MSGID_MULTI_PARAM_SET_PERCENT, destAddress, payload.length / 2, FLAG_GUARANTEED);
+		const header = this.buildHeader(HiQnetMessageId.MULTI_PARAM_SET_PERCENT, destAddress, payload.length / 2, FLAG_GUARANTEED);
 		this.transmit(header + payload);
 	}
 
 	//#region Manual debugging helpers
 
 	private sendGetAttributes(attributeIds: number[]) {
-		const destAddress = this.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
+		const destAddress = HiQnetUtils.createFullAddress(this._deviceAddress, this._virtualDeviceAddress, DEFAULT_OBJECT_ID);
 
 		let payload = '';
 		payload += attributeIds.length.toString(16).padLeft(4);  // Num_Attributes (UWORD)
@@ -503,7 +485,7 @@
 		}
 
 		const flags = FLAG_GUARANTEED;
-		const header = this.buildHeader(MSGID_GET_ATTRIBUTES, destAddress, payload.length / 2, flags);
+		const header = this.buildHeader(HiQnetMessageId.GET_ATTRIBUTES, destAddress, payload.length / 2, flags);
 		this.transmit(header + payload);
 
 		this._logger.logInfo(
@@ -515,10 +497,10 @@
 	}
 
 	private sendGetVDList() {
-		const destAddress = 'FFFF00000000'; // Broadcast address per HiQnet spec s.8.7
-		const payload = '00';                // Root Virtual Device index
+		const destAddress = BROADCAST_ADDRESS;
+		const payload = DEFAULT_VIRTUAL_DEVICE_ADDRESS;  // Root Virtual Device index
 		const flags = FLAG_GUARANTEED;
-		const header = this.buildHeader(MSGID_GET_VD_LIST, destAddress, payload.length / 2, flags);
+		const header = this.buildHeader(HiQnetMessageId.GET_VD_LIST, destAddress, payload.length / 2, flags);
 		this.transmit(header + payload);
 
 		this._logger.logInfo('TX GetVDList broadcast to ' + destAddress.toUpperCase(), LogInfoLevel.High, this._loggerContext);
@@ -535,19 +517,19 @@
 
 	//#endregion
 
-	private buildHeader(messageId: string, destAddress: string, payloadByteLen: number, flagsBits: number): string {
+	private buildHeader(messageId: HiQnetMessageId, destAddress: string, payloadByteLen: number, flagsBits: number): string {
 		const totalLen = STD_HEADER_LEN + payloadByteLen;
-		const sourceAddress = this.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
+		const sourceAddress = HiQnetUtils.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
 
 		let header = this._protocolVersionHex;
 		header += STD_HEADER_LEN.toString(16).padLeft(2);
 		header += totalLen.toString(16).padLeft(8);
 		header += sourceAddress;
 		header += destAddress;
-		header += messageId;
+		header += messageId.toString(16).padLeft(4);
 		header += flagsBits.toString(16).padLeft(4);
 		header += HOP_COUNT;
-		header += '0000';
+		header += '0000';	// Sequence number (can be 0 for our purposes since we don't use ACKs or retries)
 
 		return header;
 	}
@@ -567,43 +549,22 @@
 
 	//#region Incoming message processing
 
-	private processMessage(messageHex: string) {
-		if (messageHex.length < STD_HEADER_LEN * 2) return;
-
-		const protocolVersionHex = messageHex.substring(0, 2);
-		if (protocolVersionHex != this._protocolVersionHex) {
-			this._logger.logError(
-				'Unexpected protocol version 0x' + protocolVersionHex.toUpperCase()
-				+ ' (expected 0x' + this._protocolVersionHex.toUpperCase() + ') -- discarding.',
-				this._loggerContext
-			);
-			return;
-		}
-
-		const headerLenBytes = hexToUnsignedInt(messageHex.substring(2, 4));
-		const totalLenBytes  = hexToUnsignedInt(messageHex.substring(4, 12));
-		const sourceAddress  = messageHex.substring(12, 24);
-		const messageIdHex   = messageHex.substring(36, 40).toLowerCase();
-		const flags          = hexToUnsignedInt(messageHex.substring(40, 44));
-		const seqNum         = hexToUnsignedInt(messageHex.substring(46, 50));
-		const payloadStart   = headerLenBytes * 2;
-		const payload        = messageHex.substring(payloadStart);
-
+	private processMessage(message: HiQnetMessage) {
 		this._logger.logInfo(
-			'RX msgId=0x' + messageIdHex.toUpperCase()
-			+ ' flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
-			+ ' headerLen=' + headerLenBytes
-			+ ' totalLen=' + totalLenBytes
-			+ ' src=' + sourceAddress.toUpperCase()
-			+ ' seq=' + seqNum
-			+ ' payloadBytes=' + (payload.length / 2),
+			'RX msgId=0x' + message.MessageId.toString(16).padLeft(4).toUpperCase()
+			+ ' flags=0x' + message.Flags.toString(16).padLeft(4).toUpperCase()
+			+ ' headerLenBytes=' + message.HeaderLengthBytes
+			+ ' totalLenBytes=' + message.TotalLengthBytes
+			+ ' src=' + message.SourceAddress.toUpperCase()
+			+ ' seq=' + message.SeqNum
+			+ ' payloadBytes=' + (message.Payload.length / 2),
 			LogInfoLevel.High,
 			this._loggerContext
 		);
 
 		// Parse and log any error extension (FLAGS bit 3).
-		let effectivePayload = payload;
-		if ((flags & 0x0008) != 0) {
+		let effectivePayload = message.Payload;
+		if ((message.Flags & 0x0008) != 0) {
 			if (effectivePayload.length >= 8) {
 				const errCode      = hexToUnsignedInt(effectivePayload.substring(0, 4));
 				const strByteCount = hexToUnsignedInt(effectivePayload.substring(4, 8));
@@ -616,65 +577,65 @@
 				}
 				this._logger.logError(
 					'Device error: code=0x' + errCode.toString(16).padLeft(4).toUpperCase()
-					+ ' msgId=0x' + messageIdHex.toUpperCase()
+					+ ' msgId=0x' + message.MessageId.toString(16).padLeft(4).toUpperCase()
 					+ (errStr ? ' message="' + errStr + '"' : ' (no error string)'),
 					this._loggerContext
 				);
 				effectivePayload = effectivePayload.substring(8 + strByteCount * 2);
 			} else {
 				this._logger.logError(
-					'Error flag set but payload too short to parse (msgId=0x' + messageIdHex.toUpperCase() + ').',
+					'Error flag set but payload too short to parse (msgId=0x' + message.MessageId.toString(16).padLeft(4).toUpperCase() + ').',
 					this._loggerContext
 				);
 			}
 		}
 
-		switch (messageIdHex) {
-			case MSGID_DISCO_INFO: /* Discovery */
-				this.handleDiscoInfo(flags, sourceAddress, effectivePayload);
+		switch (message.MessageId) {
+			case HiQnetMessageId.DISCO_INFO: /* Discovery */
+				this.handleDiscoInfo(message.Flags, message.SourceAddress, effectivePayload);
 				break;
-			case MSGID_GOODBYE: /* Goodbye */
+			case HiQnetMessageId.GOODBYE: /* Goodbye */
 				this._logger.logInfo('Received Goodbye from device.', LogInfoLevel.Low, this._loggerContext);
 				break;
-			case MSGID_HELLO: /* Hello */
+			case HiQnetMessageId.HELLO: /* Hello */
 				this._logger.logInfo('Received Hello from device.', LogInfoLevel.High, this._loggerContext);
-				this.handleHello(sourceAddress);
+				this.handleHello(message.SourceAddress);
 				break;
-			case MSGID_MULTI_PARAM_SET: /* MultiParamSet -- subscription push notification or get response */
+			case HiQnetMessageId.MULTI_PARAM_SET: /* MultiParamSet -- subscription push notification or get response */
 				this._logger.logInfo(
-					'RX MultiParamSet (0x0100) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
-					+ ' src=' + sourceAddress.toUpperCase(),
+					'RX MultiParamSet (0x0100) flags=0x' + message.Flags.toString(16).padLeft(4).toUpperCase()
+					+ ' src=' + message.SourceAddress.toUpperCase(),
 					LogInfoLevel.High,
 					this._loggerContext
 				);
 				// Extract object address from source VD-OBJECT (bytes 3-5 of source address).
 				// Avoids false matches when multiple parameters share the same param ID.
 				{
-					const srcObj = sourceAddress.substring(6, 12);
+					const srcObj = message.SourceAddress.substring(6, 12);
 					this.handleMultiParamSet(effectivePayload, srcObj !== '000000' ? srcObj : null);
 				}
 				break;
-			case MSGID_MULTI_OBJECT_PARAM_SET: /* MultiObjectParamSet -- subscription push notification */
+			case HiQnetMessageId.MULTI_OBJECT_PARAM_SET: /* MultiObjectParamSet -- subscription push notification */
 				this._logger.logInfo(
-					'RX MultiObjectParamSet (0x0101) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
-					+ ' src=' + sourceAddress.toUpperCase()
+					'RX MultiObjectParamSet (0x0101) flags=0x' + message.Flags.toString(16).padLeft(4).toUpperCase()
+					+ ' src=' + message.SourceAddress.toUpperCase()
 					+ ' bytes=' + (effectivePayload.length / 2),
 					LogInfoLevel.Low,
 					this._loggerContext
 				);
 				this.handleMultiObjectParamSet(effectivePayload);
 				break;
-			case MSGID_MULTI_PARAM_GET: /* MultiParamGet response */
-				if ((flags & (FLAG_INFORMATION | FLAG_REQUEST_ACK)) != 0) {
+			case HiQnetMessageId.MULTI_PARAM_GET: /* MultiParamGet response */
+				if ((message.Flags & (FLAG_INFORMATION | FLAG_REQUEST_ACK)) != 0) {
 					this._logger.logInfo('Received MultiParamGet response (0x0103).', LogInfoLevel.High, this._loggerContext);
-					const srcObj103 = sourceAddress.substring(6, 12);
+					const srcObj103 = message.SourceAddress.substring(6, 12);
 					this.handleMultiParamSet(effectivePayload, srcObj103 !== '000000' ? srcObj103 : null);
 				}
 				break;
-			case MSGID_GET_ATTRIBUTES: /* GetAttributes response */
-				if ((flags & FLAG_INFORMATION) != 0) {
+			case HiQnetMessageId.GET_ATTRIBUTES: /* GetAttributes response */
+				if ((message.Flags & FLAG_INFORMATION) != 0) {
 					this._logger.logInfo(
-						'RX GetAttributes(I) from ' + sourceAddress.toUpperCase()
+						'RX GetAttributes(I) from ' + message.SourceAddress.toUpperCase()
 						+ ' payloadBytes=' + (effectivePayload.length / 2),
 						LogInfoLevel.High,
 						this._loggerContext
@@ -699,24 +660,24 @@
 							this._loggerContext
 						);
 					}
-				} else if ((flags & FLAG_REQUEST_ACK) != 0) {
+				} else if ((message.Flags & FLAG_REQUEST_ACK) != 0) {
 					this._logger.logInfo(
-						'RX GetAttributes ACK from ' + sourceAddress.toUpperCase(),
+						'RX GetAttributes ACK from ' + message.SourceAddress.toUpperCase(),
 						LogInfoLevel.High,
 						this._loggerContext
 					);
 				} else {
 					this._logger.logInfo(
-						'RX GetAttributes(Q) from ' + sourceAddress.toUpperCase(),
+						'RX GetAttributes(Q) from ' + message.SourceAddress.toUpperCase(),
 						LogInfoLevel.High,
 						this._loggerContext
 					);
 				}
 				break;
-			case MSGID_MULTI_PARAM_SET_PERCENT: /* ParamSetPercent -- subscription push or ACK response */
+			case HiQnetMessageId.MULTI_PARAM_SET_PERCENT: /* ParamSetPercent -- subscription push or ACK response */
 				this._logger.logInfo(
-					'RX ParamSetPercent (0x0102) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
-					+ ' src=' + sourceAddress.toUpperCase()
+					'RX ParamSetPercent (0x0102) flags=0x' + message.Flags.toString(16).padLeft(4).toUpperCase()
+					+ ' src=' + message.SourceAddress.toUpperCase()
 					+ ' bytes=' + (effectivePayload.length / 2),
 					LogInfoLevel.High,
 					this._loggerContext
@@ -756,10 +717,10 @@
 					}
 				}
 				break;
-			case MSGID_PARAM_SUBSCRIBE_PERCENT: /* ParamSubscribePercent -- subscription push notification */
+			case HiQnetMessageId.PARAM_SUBSCRIBE_PERCENT: /* ParamSubscribePercent -- subscription push notification */
 				this._logger.logInfo(
-					'RX ParamSubscribePercent (0x0111) flags=0x' + flags.toString(16).padLeft(4).toUpperCase()
-					+ ' src=' + sourceAddress.toUpperCase()
+					'RX ParamSubscribePercent (0x0111) flags=0x' + message.Flags.toString(16).padLeft(4).toUpperCase()
+					+ ' src=' + message.SourceAddress.toUpperCase()
 					+ ' bytes=' + (effectivePayload.length / 2),
 					LogInfoLevel.High,
 					this._loggerContext
@@ -786,6 +747,7 @@
 								LogInfoLevel.High,
 								this._loggerContext
 							);
+
 							SystemVars.Write('ParameterIntValue' + this._index + '_' + paramObj.Index, n);
 						} else {
 							this._logger.logInfo(
@@ -798,7 +760,7 @@
 				}
 				break;
 			default:
-				this._logger.logInfo('Unhandled message 0x' + messageIdHex.toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
+				this._logger.logInfo('Unhandled message 0x' + message.MessageId.toString(16).padLeft(4).toUpperCase() + '.', LogInfoLevel.High, this._loggerContext);
 				break;
 		}
 	}
@@ -810,18 +772,7 @@
 		// Flags = 0x002C (Guaranteed + Error + Information).
 		// Payload = errorExtension block (errorCode=UWORD, strByteCount=UWORD) = 4 bytes.
 		const flags = FLAG_GUARANTEED | FLAG_REQUEST_ACK | FLAG_INFORMATION; // 0x002C
-		const totalLen = STD_HEADER_LEN + 4;
-		const sourceAddress = this.createFullAddress(this._sourceDeviceAddress, DEFAULT_VIRTUAL_DEVICE_ADDRESS, DEFAULT_OBJECT_ID);
-
-		let header = this._protocolVersionHex;
-		header += STD_HEADER_LEN.toString(16).padLeft(2);               // headerLen = 25
-		header += totalLen.toString(16).padLeft(8);                            // messageLen = 29
-		header += destAddress;                                                 // dest address
-		header += sourceAddress;                                      		   // source address
-		header += MSGID_HELLO;                                          // msgId
-		header += flags.toString(16).padLeft(4);                               // flags = 0x002C
-		header += HOP_COUNT;                                        // hop count
-		header += '0000';                                                      // seqNum
+		const header = this.buildHeader(HiQnetMessageId.HELLO, destAddress, 4, flags);
 
 		this.transmit(header + '0000' + '0000'); // errorCode=0, strByteCount=0
 	}
@@ -900,7 +851,7 @@
 			const dataType = hexToUnsignedInt(payload.substring(pos + 4, pos + 6));
 			pos += 6;
 
-			const valueHexChars = hexCharsForDataType(dataType);
+			const valueHexChars = HiQnetUtils.hexCharsForDataType(dataType);
 			let valueHex: string;
 			let consumed: number;
 
@@ -915,7 +866,7 @@
 				}
 				valueHex = payload.substring(pos, pos + valueHexChars);
 				consumed = valueHexChars;
-			} else if (dataType == HQ_BLOCK || dataType == HQ_STRING) {
+			} else if (dataType == HiQnetDataType.HQ_BLOCK || dataType == HiQnetDataType.HQ_STRING) {
 				if (payload.length < pos + 4) {
 					this._logger.logError('Variable-length size field truncated.', this._loggerContext);
 					return -1;
@@ -950,6 +901,7 @@
 			);
 
 			const parameter = this.findMatchingParameter(objectAddress, paramId);
+
 			if (!parameter) {
 				this._logger.logInfo(
 					'    No configured parameter for obj='
@@ -961,9 +913,17 @@
 				continue;
 			}
 
+			if (parameter.DataType != dataType) {
+				this._logger.logError(
+					'    Data type mismatch for parameter "' + parameter.Name + '" -- expected ' + parameter.DataType + ', got ' + dataType + '.',
+					this._loggerContext
+				);
+				continue;
+			}
+
 			this._logger.logInfo('    Matched to "' + parameter.Name + '".', LogInfoLevel.High, this._loggerContext);
 
-			this.applyDecodedValue(parameter, dataType, valueHex);
+			this.updateParameterValue(parameter, valueHex);
 		}
 
 		return pos;
@@ -981,10 +941,10 @@
 		return null;
 	}
 
-	private applyDecodedValue(parameter: Parameter, dataType: number, valueHex: string) {
+	private updateParameterValue(parameter: Parameter, valueHex: string) {
 		switch (parameter.VariableType) {
 			case 'Boolean': {
-				const decoded = decodeHiqnetValueHex(dataType, valueHex);
+				const decoded = HiQnetUtils.decodeHiQnetNumericValue(parameter.DataType, valueHex);
 				const boolVal = decoded != 0;
 				this._logger.logInfo(
 					'Update "' + parameter.Name + '" -> Boolean ' + boolVal
@@ -996,11 +956,9 @@
 				break;
 			}
 			case 'Integer': {
-				let n: number;
-				if (dataType == HQ_FLOAT32) {
-					n = Math.round(hexToFloat32(valueHex));
-				} else {
-					n = decodeHiqnetValueHex(dataType, valueHex);
+				let n: number = HiQnetUtils.decodeHiQnetNumericValue(parameter.DataType, valueHex);
+				if (parameter.DataType == HiQnetDataType.HQ_FLOAT32 || parameter.DataType == HiQnetDataType.HQ_FLOAT64) {
+					n = Math.round(n * 100); // For floats, store as integer percentage (e.g. 0.75 → 75).
 				}
 				this._logger.logInfo(
 					'Update "' + parameter.Name + '" -> Integer ' + n
@@ -1012,7 +970,7 @@
 				break;
 			}
 			case 'String': {
-				const str = this.decodeStringValue(dataType, valueHex);
+				const str = HiQnetUtils.decodeHiQnetStringValue(parameter.DataType, valueHex);
 				this._logger.logInfo(
 					'Update "' + parameter.Name + '" -> String "' + str + '"'
 					+ ' (raw=0x' + valueHex.toUpperCase() + ')',
@@ -1023,22 +981,6 @@
 				break;
 			}
 		}
-	}
-
-	private decodeStringValue(dataType: number, valueHex: string): string {
-		if (dataType == HQ_STRING) {
-			// HiQnet STRING is UTF-16BE with NULL terminator. Read pairs of bytes as chars.
-			const out: string[] = [];
-			for (let i = 0; i + 4 <= valueHex.length; i += 4) {
-				const code = hexToUnsignedInt(valueHex.substring(i, i + 4));
-				if (code == 0) break;
-				out.push(String.fromCharCode(code));
-			}
-			return out.join('');
-		}
-		// For non-STRING types, return the numeric value as a decimal string.
-		const n = decodeHiqnetValueHex(dataType, valueHex);
-		return n.toString();
 	}
 
 	//#endregion
@@ -1066,11 +1008,6 @@
 
 	private setConnectedValue(value: boolean) {
 		SystemVars.Write('Connected' + this._index, value, 'BOOLEAN');
-	}
-
-	private updateParameterValueVariable(parameter: Parameter, hexValue: string) {
-		const dataType = hexToUnsignedInt(parameter.DataType);
-		this.applyDecodedValue(parameter, dataType, hexValue);
 	}
 
 	//#endregion

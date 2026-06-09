@@ -46,17 +46,19 @@ for (var j = 1; j <= parameterCount; j++)
             <choice name="Set (typed)" value="1" />
             <choice name="Set % (1.15 fixed point)" value="2" />
         </setting>
-        <setting type="mcstring" name="Data Type" variable="ParameterDataType<#= i #>_<#= j #>" default="00" description="HiQnet wire data type (used when Set Method = Set)" condition="$ParameterAllowSet<#= i #>_<#= j #> and $ParameterSetMethod<#= i #>_<#= j #> == 1">
-            <choice name="BYTE (signed 8-bit)" value="00" />
-            <choice name="UBYTE (unsigned 8-bit)" value="01" />
-            <choice name="WORD (signed 16-bit)" value="02" />
-            <choice name="UWORD (unsigned 16-bit)" value="03" />
-            <choice name="LONG (signed 32-bit)" value="04" />
-            <choice name="ULONG (unsigned 32-bit)" value="05" />
-            <choice name="FLOAT32" value="06" />
-            <choice name="FLOAT64" value="07" />
-            <choice name="LONG64" value="0A" />
-            <choice name="ULONG64" value="0B" />
+        <setting type="mcinteger" name="Data Type" variable="ParameterDataType<#= i #>_<#= j #>" default="0" description="HiQnet wire data type (used when Set Method = Set)" condition="$ParameterAllowSet<#= i #>_<#= j #> and $ParameterSetMethod<#= i #>_<#= j #> == 1">
+            <choice name="BYTE (signed 8-bit)" value="0" />
+            <choice name="UBYTE (unsigned 8-bit)" value="1" />
+            <choice name="WORD (signed 16-bit)" value="2" />
+            <choice name="UWORD (unsigned 16-bit)" value="3" />
+            <choice name="LONG (signed 32-bit)" value="4" />
+            <choice name="ULONG (unsigned 32-bit)" value="5" />
+            <choice name="FLOAT32" value="6" />
+            <choice name="FLOAT64" value="7" />
+            <choice name="BLOCK" value="8" />
+            <choice name="STRING" value="9" />
+            <choice name="LONG64" value="10" />
+            <choice name="ULONG64" value="11" />
         </setting>
         <setting type="boolean" name="Enable Subscribe" variable="ParameterEnableSubscribe<#= i #>_<#= j #>" default="true" description="Subscribe to parameter value updates" />
         <setting type="mcinteger" name="Variable Type" variable="ParameterVariableType<#= i #>_<#= j #>" default="2" description="System variable type to mirror this parameter into" condition="$ParameterEnableSubscribe<#= i #>_<#= j #>">

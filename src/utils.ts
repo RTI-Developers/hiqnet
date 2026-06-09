@@ -90,29 +90,3 @@ function percentToHex115(percent: number): string {
     if (n < 0) n += 0x10000;
     return n.toString(16).padLeft(4);
 }
-
-// Number of hex chars (2 per byte) for a HiQnet fixed-size data type enum.
-// Returns -1 for variable-length types (BLOCK, STRING).
-function hexCharsForDataType(dataType: number): number {
-    switch (dataType) {
-        case HQ_BYTE: case HQ_UBYTE: return 2;
-        case HQ_WORD: case HQ_UWORD: return 4;
-        case HQ_LONG: case HQ_ULONG: case HQ_FLOAT32: return 8;
-        case HQ_FLOAT64: case HQ_LONG64: case HQ_ULONG64: return 16;
-        case HQ_BLOCK: case HQ_STRING: return -1;
-        default: return -1;
-    }
-}
-
-function decodeHiqnetValueHex(dataType: number, hex: string): number {
-    switch (dataType) {
-        case HQ_BYTE: case HQ_WORD: case HQ_LONG: case HQ_LONG64:
-            return hexToSignedInt(hex);
-        case HQ_FLOAT32:
-            return hexToFloat32(hex);
-        case HQ_FLOAT64:
-            return hexToFloat64(hex);
-        default:
-            return hexToUnsignedInt(hex);
-    }
-}

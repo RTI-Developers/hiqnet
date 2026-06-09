@@ -38,7 +38,7 @@ for (let i = 1; i <= g_totalDeviceCount; i++) {
             variableTypeRaw == 1 ? 'Boolean' : variableTypeRaw == 3 ? 'String' : 'Integer';
         const setMethodRaw = parseInt(Config.Get('ParameterSetMethod' + i + '_' + j));
         parameters[j] = {
-            DataType: Config.Get('ParameterDataType' + i + '_' + j).cleanHex(),
+            DataType: parseInt(Config.Get('ParameterDataType' + i + '_' + j), 10),
             Id: parseInt(Config.Get('ParameterId' + i + '_' + j), 10).toString(16).padLeft(4),
             Index: j,
             IsSetAllowed: Config.Get('ParameterAllowSet' + i + '_' + j) == 'true',
