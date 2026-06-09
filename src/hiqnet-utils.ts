@@ -30,7 +30,7 @@ class HiQnetUtils {
 
     // Number of hex chars (2 per byte) for a HiQnet fixed-size data type enum.
     // Returns -1 for variable-length types (BLOCK, STRING).
-    public static hexCharsForDataType(dataType: number): number {
+    public static hexCharsForDataType(dataType: HiQnetDataType): number {
         switch (dataType) {
             case HiQnetDataType.HQ_BYTE:
             case HiQnetDataType.HQ_UBYTE:

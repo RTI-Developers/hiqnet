@@ -28,23 +28,3 @@ interface HiQnetMessage {
 	SourceAddress: string;
 	TotalLengthBytes: number;
 } 
-
-// ── Payload config types ────────────────────────────────────
-
-interface DiscoInfoConfig {
-	sourceDeviceAddress: string;
-	sourceMacAddress: string;
-	sourceSerialNumber: string;
-	controllerIpHex: string;
-	controllerNetMask: string;
-}
-
-interface HeaderConfig {
-	sourceAddress: string;
-	destAddress: string;
-	messageId: string;
-	payloadByteLen: number;
-	flagsBits: number;
-	protocolVersionHex: string;
-	headerLenBytes?: number;
-}

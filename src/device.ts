@@ -847,9 +847,18 @@
 				this._logger.logError('Param block truncated at param index ' + p + '.', this._loggerContext);
 				return -1;
 			}
-			const paramId  = payload.substring(pos, pos + 4).toLowerCase();
-			const dataType = hexToUnsignedInt(payload.substring(pos + 4, pos + 6));
+			const paramIdHex  = payload.substring(pos, pos + 4).toLowerCase();
+			const paramDataTypeHex = payload.substring(pos + 4, pos + 6);
+			const dataType = HiQnetUtils.hexToDataType(paramDataTypeHex);
 			pos += 6;
+			
+			if (dataType === null) {
+				this._logger.logError(
+					'Unknown data type 0x' + paramDataTypeHex + ' for param 0x' + paramIdHex.toUpperCase() + ' -- stopping parse.',
+					this._loggerContext
+				);
+				return -1;
+			}
 
 			const valueHexChars = HiQnetUtils.hexCharsForDataType(dataType);
 			let valueHex: string;
@@ -858,7 +867,7 @@
 			if (valueHexChars > 0) {
 				if (payload.length < pos + valueHexChars) {
 					this._logger.logError(
-						'Fixed-width value truncated for param 0x' + paramId.toUpperCase()
+						'Fixed-width value truncated for param 0x' + paramIdHex.toUpperCase()
 						+ ' (need ' + valueHexChars + ' chars, have ' + (payload.length - pos) + ').',
 						this._loggerContext
 					);
@@ -866,7 +875,7 @@
 				}
 				valueHex = payload.substring(pos, pos + valueHexChars);
 				consumed = valueHexChars;
-			} else if (dataType == HiQnetDataType.HQ_BLOCK || dataType == HiQnetDataType.HQ_STRING) {
+			} else {
 				if (payload.length < pos + 4) {
 					this._logger.logError('Variable-length size field truncated.', this._loggerContext);
 					return -1;
@@ -875,7 +884,7 @@
 				const blockHex   = blockBytes * 2;
 				if (payload.length < pos + 4 + blockHex) {
 					this._logger.logError(
-						'Variable-length data truncated for param 0x' + paramId.toUpperCase()
+						'Variable-length data truncated for param 0x' + paramIdHex.toUpperCase()
 						+ ' (declared ' + blockBytes + ' bytes, only ' + ((payload.length - pos - 4) / 2) + ' available).',
 						this._loggerContext
 					);
@@ -883,30 +892,25 @@
 				}
 				valueHex = payload.substring(pos + 4, pos + 4 + blockHex);
 				consumed = 4 + blockHex;
-			} else {
-				this._logger.logError(
-					'Unknown data type ' + dataType + ' for param 0x' + paramId.toUpperCase() + ' -- stopping parse.',
-					this._loggerContext
-				);
-				return -1;
 			}
+			
 			pos += consumed;
 
 			this._logger.logInfo(
-				'    Param id=0x' + paramId.toUpperCase()
+				'    Param id=0x' + paramIdHex.toUpperCase()
 				+ ' dataType=' + dataType
 				+ ' rawValue=0x' + valueHex.toUpperCase(),
 				LogInfoLevel.High,
 				this._loggerContext
 			);
 
-			const parameter = this.findMatchingParameter(objectAddress, paramId);
+			const parameter = this.findMatchingParameter(objectAddress, paramIdHex);
 
 			if (!parameter) {
 				this._logger.logInfo(
 					'    No configured parameter for obj='
 					+ (objectAddress ? '0x' + objectAddress.toUpperCase() : '*')
-					+ ' id=0x' + paramId.toUpperCase() + ' -- skipping.',
+					+ ' id=0x' + paramIdHex.toUpperCase() + ' -- skipping.',
 					LogInfoLevel.High,
 					this._loggerContext
 				);
