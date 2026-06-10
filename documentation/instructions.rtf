@@ -46,7 +46,7 @@ Driver provides ability to set and monitor parameters from HiQnet compatible dev
 \par
 \b Enable Subscribe\b0  \emdash  Subscribes to push updates for this parameter from the device.\par
 \par
-\b Variable Type\b0  (when Enable Subscribe is enabled) \emdash  RTI variable type used to represent the received value: \b Boolean\b0 , \b Integer\b0 , or \b String\b0 .\par
+\b Variable Type\b0  (when Enable Subscribe is enabled) \emdash  RTI variable type used to represent the received value: \b Boolean\b0 , \b Integer\b0 , or \b String\b0 . When Data Type is FLOAT32 or FLOAT64 and Variable Type is Integer, the received float is multiplied by 100 and rounded before storage (e.g., 0.75 \rarrow  75).\par
 \par
 \pard\nowidctlpar\b\fs24 Variables\b0\fs20\par
 \par
@@ -59,6 +59,16 @@ Variables are created per device (N = device number, 1\endash 16) and per parame
 \b ParameterIntValue\i N\i0 _\i P\i0\b0  (Integer) \emdash  Current value of parameter P on device N, for parameters with Variable Type = Integer.\par
 \par
 \b ParameterStringValue\i N\i0 _\i P\i0\b0  (String) \emdash  Current value of parameter P on device N, for parameters with Variable Type = String.\par
+\par
+\pard\nowidctlpar\b\fs24 Functions\b0\fs20\par
+\par
+Functions are created per device (N = device number, 1\endash 16) and per parameter (P = parameter number, 1\endash 20). Category labels use the configured device name.\par
+\par
+\pard\nowidctlpar\li360\b Set \i [Parameter Name]\i0  Value\b0  \emdash  Sends the specified hex string value to parameter P on device N. Only available for parameters with Allow Set enabled. The value is sent using the configured Set Method and Data Type for that parameter.\par
+\par
+\b Dump Device Info\i N\i0\b0  \emdash  Queries standard HiQnet attributes (IDs 0x0001\endash 0x0006) on device N and logs the response to the trace log. Intended for debugging and device discovery.\par
+\par
+\b Dump VD List\i N\i0\b0  \emdash  Broadcasts a GetVDList request and logs the response to the trace log. Intended for debugging.\par
 \par
 \pard\nowidctlpar\b\fs24 Events\b0\fs20\par
 \par
@@ -76,4 +86,5 @@ Events are fired per device (N = device number, 1\endash 16).\par
 \par
 \pard\nowidctlpar\tx450 1.0:\tab Original release of the driver (partially complete)\par
 2.0:\tab Finish implementation of HiQNet protocol, many bug fixes\par
+2.2:\tab Hello session refusal; correct subscribe/unsubscribe lifecycle; percent push notification handling (ParamSetPercent, ParamSubscribePercent); fix FLOAT32/FLOAT64 value decoding; add Dump Device Info and Dump VD List debug commands\par
 }
