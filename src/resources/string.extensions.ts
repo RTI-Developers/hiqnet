@@ -22,5 +22,10 @@ String.prototype.replaceAll = function(this: string, search: string, replacement
 };
 
 String.prototype.toHexByteArray = function(this: string) : string[] {
-    return this.split('').map(x => x.charCodeAt(0).toString(16).padLeft(2));
+    const out: string[] = [];
+    for (let i = 0; i < this.length; i++) {
+        const b = this.charCodeAt(i) & 0xFF;
+        out.push((b < 16 ? '0' : '') + b.toString(16));
+    }
+    return out;
 };

@@ -4,21 +4,27 @@
     "target": "es3",
     "allowJs": true,
     "outFile": "./dist/index.js",
-    "lib": ["ES5"],
+    "lib": [],
     "module": "none",
     "strictNullChecks": true,
-    "ignoreDeprecations": "5.0"
+    "ignoreDeprecations": "5.0",
+    "typeRoots": ["./node_modules/@rti-developers", "./node_modules/@types"],
+    "types": ["sdk-types"]
   },
   "files": [
     "./src/resources/string.extensions.ts",
     "./src/utils.ts",
-    "./src/logger.ts",
-    "./src/globalHandlerMap.ts",
-    "./src/parameter.ts",
-    "./src/connectionState.ts",
-    "./src/deviceConnection.ts",
+    "./node_modules/@rti-developers/sdk-utils/src/logger.ts",
+    "./node_modules/@rti-developers/sdk-utils/src/global-handle-map.ts",
+    "./src/utils.ts",
+    "./src/hiqnet-constants.ts",
+    "./src/hiqnet-utils.ts",
+    "./src/hiqnet-builder.ts",
+    "./src/device-connection.ts",
     "./src/device.ts",
     "./src/index.ts"
   ],
-  "include": ["./src/typings/*.d.ts"]
+  "include": [
+    "./src/typings/**/*d.ts",
+  ]
 }

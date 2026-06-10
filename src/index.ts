@@ -1,141 +1,169 @@
 
-const g_debug = Config.Get('DebugTrace') == 'true';
-const g_logger = new Logger('HiQNet Driver', g_debug);
+// Converts Audio Architect dot-notation object address (e.g. "15.22.7") to 6-char hex ("0f1607").
+function parseObjectAddress(addr: string): string {
+    const parts = addr.split('.');
+    if (parts.length !== 3) return '000000';
+    let hex = '';
+    for (let i = 0; i < 3; i++) {
+        hex += parseInt(parts[i], 10).toString(16).padLeft(2);
+    }
+    return hex;
+}
 
-g_logger.logInfo('Initializing HiQNet Driver');
+const g_debug = Config.Get('DebugTrace') == 'true';
+const g_logger = new Logger('HiQnet Driver', g_debug);
+
+g_logger.logInfo('Initializing HiQnet Driver', LogInfoLevel.Low);
 
 const g_totalDeviceCount = parseInt(Config.Get('TotalDeviceCount'));
+const g_pollingIntervalSecondsRaw = parseInt(Config.Get('PollingIntervalSeconds'));
+const g_pollingIntervalSeconds = isNaN(g_pollingIntervalSecondsRaw) || g_pollingIntervalSecondsRaw < 1 ? 8 : g_pollingIntervalSecondsRaw;
 
-g_logger.logTrace('Total Device Count (' + g_totalDeviceCount + ')');
+g_logger.logInfo('Total Device Count (' + g_totalDeviceCount + ')', LogInfoLevel.High);
 
 const g_devices = new Array<Device>();
-
-const g_devicesGlobalHandlerMap = new GlobalHandlerMap<Device>();
+const g_devicesGlobalHandleMap = new GlobalHandleMap<Device>();
 
 for (let i = 1; i <= g_totalDeviceCount; i++) {
     const name = Config.Get('DeviceName' + i);
     const address = Config.Get('DeviceAddress' + i);
 
-    g_logger.logTrace('Instantiating device (' + name + ')');
+    g_logger.logInfo('Instantiating device (' + name + ')', LogInfoLevel.High);
 
     const parameterCount = parseInt(Config.Get('DeviceParameterCount' + i));
     const parameters = new Array<Parameter>();
     for (let j = 1; j <= parameterCount; j++) {
+        const variableTypeRaw = parseInt(Config.Get('ParameterVariableType' + i + '_' + j));
+        const variableType: 'Boolean' | 'Integer' | 'String' =
+            variableTypeRaw == 1 ? 'Boolean' : variableTypeRaw == 3 ? 'String' : 'Integer';
+        const setMethodRaw = parseInt(Config.Get('ParameterSetMethod' + i + '_' + j));
         parameters[j] = {
-            DataType: Config.Get('ParameterDataType' + i + '_' + j),
-            Id: Config.Get('ParameterId' + i + '_' + j).cleanHex(),
+            DataType: parseInt(Config.Get('ParameterDataType' + i + '_' + j), 10),
+            Id: parseInt(Config.Get('ParameterId' + i + '_' + j), 10).toString(16).padLeft(4),
             Index: j,
-            IsSetAllowed: Config.Get('ParameterAllowSet' + i + '_' + j)  == 'true',
+            IsSetAllowed: Config.Get('ParameterAllowSet' + i + '_' + j) == 'true',
             IsSubscribeEnabled: Config.Get('ParameterEnableSubscribe' + i + '_' + j) == 'true',
             Name: Config.Get('ParameterName' + i + '_' + j),
-            ObjectAddress: Config.Get('HiQNetObjectAddress' + i + '_' + j).cleanHex(),
-            SensorRate: Config.Get('ParameterSensorRate' + i + '_' + j).cleanHex(),
-            SetMethod: parseInt(Config.Get('ParameterSetMethod' + i + '_' + j)) == 1 ? 'Set' : 'Set %',
-            SubscriptionType: Config.Get('ParameterSubscriptionType' + i + '_' + j).cleanHex(),
-            VariableType: parseInt(Config.Get('ParameterVariableType' + i + '_' + j)) == 1 ? 'Boolean' : parseInt(Config.Get('ParameterVariableType' + i + '_' + j)) == 2 ? 'Integer' : 'String'
+            ObjectAddress: parseObjectAddress(Config.Get('HiQnetObjectAddress' + i + '_' + j)),
+            SetMethod: setMethodRaw == 2 ? 'Set %' : 'Set',
+            VariableType: variableType
         };
     }
 
-    const device = new Device(
-		i,
-		name,
-        new DeviceConnection(
-            address,
-            DeviceConnectionOnCommRx,
-            DeviceConnectionOnConnect,
-            DeviceConnectionOnDisconnect,
-            DeviceConnectionOnTimeout,
-            (state: ConnectionState) => { device.OnConnectionStateChanged(state); },
-            g_logger
-        ),
-        parameters,
-        DeviceOnPollingIntervalElapsed,
-		g_logger
-	);
+    const connection = new DeviceConnection(
+        address,
+        3804,
+        DeviceConnectionOnCommRx,
+        DeviceConnectionOnConnect,
+        DeviceConnectionOnDisconnect,
+        DeviceConnectionOnFailureTick,
+        (state: ConnectionState) => { device.OnConnectionStateChanged(state); },
+        g_logger
+    );
 
-	g_devicesGlobalHandlerMap.register(device.PollingTimerHandle, device);
-    g_devicesGlobalHandlerMap.register(device.Connection.TcpHandle, device);
-	g_devicesGlobalHandlerMap.register(device.Connection.TimoutTimerHandle, device);
+    const device = new Device(
+        i,
+        name,
+        connection,
+        parameters,
+        g_pollingIntervalSeconds,
+        DeviceOnPollingEventElapsed,
+        g_logger
+    );
+
+    g_devicesGlobalHandleMap.register(device.PollingEventHandle, device);
+    g_devicesGlobalHandleMap.register(device.Connection.TcpHandle, device);
+    g_devicesGlobalHandleMap.register(device.Connection.FailureTimerHandle, device);
 
     g_devices[i] = device;
+
+    connection.start();
 }
+
+System.OnShutdownFunc = function() {
+    g_logger.logInfo('Driver shutting down — closing device connections', LogInfoLevel.Low);
+    for (let i = 1; i < g_devices.length; i++) {
+        const d = g_devices[i];
+        if (d) d.Shutdown();
+    }
+};
 
 //#region DeviceConnection event handlers
 
 function DeviceConnectionOnCommRx(data: string, handle: number) {
-    g_logger.logTrace('DeviceOnCommRx');
-
-    const device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
-    if (!device) {
-        g_logger.logError('DeviceConnectionOnCommRx: Error retrieving device from handle: ' + handle);
-        return;
-    }
-
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
+    if (!device) return;
     device.OnCommRx(data);
 }
 
 function DeviceConnectionOnConnect(handle: number) {
-    g_logger.logTrace('DeviceConnectionOnConnect');
-
-    const Device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
-    if (!Device) {
-        g_logger.logError('DeviceConnectionOnConnect: Error retrieving device from handle: ' + handle);
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
+    if (!device) {
+        g_logger.logError('DeviceConnectionOnConnect: unknown handle ' + handle);
         return;
     }
-    
-    Device.Connection.onConnect();
+    device.Connection.onConnect();
 }
 
 function DeviceConnectionOnDisconnect(handle: number) {
-    g_logger.logTrace('DeviceConnectionOnDisconnect');
-
-    const Device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
-    if (!Device) {
-        g_logger.logError('DeviceConnectionOnDisconnect: Error retrieving device from handle: ' + handle);
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
+    if (!device) {
+        g_logger.logError('DeviceConnectionOnDisconnect: unknown handle ' + handle);
         return;
     }
-    
-    Device.Connection.onDisconnect();
+    device.Connection.onDisconnect();
 }
 
-function DeviceConnectionOnTimeout(handle: number) {
-    g_logger.logTrace('DeviceConnectionOnTimeout');
-
-    const Device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
-    if (!Device) {
-        g_logger.logError('DeviceConnectionOnTimeout: Error retrieving device from handle: ' + handle);
+function DeviceConnectionOnFailureTick(handle: number) {
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
+    if (!device) {
+        g_logger.logError('DeviceConnectionOnFailureTick: unknown handle ' + handle);
         return;
     }
-
-    Device.Connection.onTimeout();
+    device.Connection.onFailureTick();
 }
 
 //#endregion
 
 //#region Device event handlers
 
-function DeviceOnPollingIntervalElapsed(handle: number) {
-    g_logger.logTrace('DeviceOnPollingIntervalElapsed');
-
-    const Device = g_devicesGlobalHandlerMap.getMappedValueFromHandle(handle);
-    if (!Device) {
-        g_logger.logError('DeviceOnPollingIntervalElapsed: Error retrieving device from handle: ' + handle);
+function DeviceOnPollingEventElapsed(handle: number) {
+    const device = g_devicesGlobalHandleMap.getMappedValueFromHandle(handle);
+    if (!device) {
+        g_logger.logError('DeviceOnPollingEventElapsed: unknown handle ' + handle);
         return;
     }
-
-    Device.OnPollingIntervalElapsed();
+    device.OnPollingEventElapsed();
 }
 
 //#endregion
 
 function setParameter(deviceIndex: number, parameterIndex: number, hexValue: string) {
-    g_logger.logTrace('setParameter');
-    g_logger.logTrace('deviceIndex (' + deviceIndex + '), parameterIndex (' + parameterIndex + '), hexValue (' + hexValue + ')');
-
-    if (deviceIndex >= g_devices.length) {
-        g_logger.logError('deviceIndex (' + deviceIndex + ') too large.  Device count is (' + g_devices.length + ')');
+    if (deviceIndex < 1 || deviceIndex >= g_devices.length) {
+        g_logger.logError('setParameter: deviceIndex (' + deviceIndex + ') out of range');
         return;
     }
+    const device = g_devices[deviceIndex];
+    if (!device) return;
+    device.SetParameter(parameterIndex, hexValue);
+}
 
-    g_devices[deviceIndex].SetParameter(parameterIndex, hexValue);
+function dumpDeviceInfo(deviceIndex: number) {
+    if (deviceIndex < 1 || deviceIndex >= g_devices.length) {
+        g_logger.logError('dumpDeviceInfo: deviceIndex (' + deviceIndex + ') out of range');
+        return;
+    }
+    const device = g_devices[deviceIndex];
+    if (!device) return;
+    device.DumpDeviceInfo();
+}
+
+function dumpVDList(deviceIndex: number) {
+    if (deviceIndex < 1 || deviceIndex >= g_devices.length) {
+        g_logger.logError('dumpVDList: deviceIndex (' + deviceIndex + ') out of range');
+        return;
+    }
+    const device = g_devices[deviceIndex];
+    if (!device) return;
+    device.DumpVDList();
 }

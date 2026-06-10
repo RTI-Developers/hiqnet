@@ -2,13 +2,13 @@
 <driverManifest>
 	<driver
 		id="{e8a2660e-ddc8-46fe-81d9-27f538c24283}"
-		name="HiQNet"
+		name="HiQnet"
 		author="Noesis Labs LLC"
 		copyright="Copyright 2023 Noesis Labs"
 		deviceManufacturer="Harman"
-		deviceModel="HiQNet Compatible"
-		driverVersion="1.1"
-		minimumRuntimeVersion="20"		
+		deviceModel="HiQnet Compatible"
+		driverVersion="2.2"
+		minimumRuntimeVersion="14"
 		minimumSoftwareVersion="9.9"
 		minimumApexVersion="10.0"
 		processorType="XP-8"
@@ -31,7 +31,7 @@
 			<include filename="SystemFunctions.xml"/>
 			<include filename="SystemVariables.xml"/>
 			<description>
-				This driver allows IP control of Harman HiQNet compatible devices.
+				This driver allows IP control of Harman HiQnet compatible devices.
 			</description>
 		</package>
 	</driver>

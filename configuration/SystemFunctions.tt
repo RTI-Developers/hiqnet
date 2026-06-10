@@ -9,6 +9,8 @@ for (var i = 1; i <= deviceCount; i++)
   string sourceId = "Device" + i.ToString();
 #>
   <category name="%%DeviceName<#= i #>%%" sourceid="<#= sourceId #>" condition="$TotalDeviceCount >= <#= i #>">
+    <function name="Dump Device Info" export="dumpDeviceInfo:<#= i #>" repeatrate="0" />
+    <function name="Dump VD List" export="dumpVDList:<#= i #>" repeatrate="0" />
 <#
   for (var j = 1; j <= parameterCount; j++)
   {

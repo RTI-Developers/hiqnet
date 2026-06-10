@@ -3,20 +3,26 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.ts",
-  "dependencies": { },
+  "dependencies": {},
   "devDependencies": {
+    "@rti-developers/sdk-types": "^1.1.0",
+    "@rti-developers/sdk-utils": "^1.0.0",
+    "@rti-developers/test-harness": "^1.1.2",
+    "@types/node": "^20",
     "@typescript-eslint/eslint-plugin": "^5.60.1",
     "@typescript-eslint/parser": "5.60.1",
     "copyfiles": "^2.4.1",
     "eslint": "^8.44.0",
-    "typescript": "^5.1.6",
-    "uglify-js": "^3.17.4"
+    "typescript": "~5.4.5",
+    "uglify-js": "^3.17.4",
+    "vitest": "^3"
   },
   "scripts": {
     "fileCopy": "copyfiles -u 1 \"configuration/*.xml\" \"documentation/*\" \"resources/*\" dist",
-    "uglify": "",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "process-t4": "t4 ./configuration/ConfigSettings.tt && t4 ./configuration/DeviceDescription.tt && t4 ./configuration/SystemEvents.tt && t4 ./configuration/SystemFunctions.tt && t4 ./configuration/SystemVariables.tt",
+    "uglify": "uglifyjs ./dist/index.js --compress arrows=false --mangle --output ./dist/index.js",
+    "test": "tsc && vitest run"
   },
   "author": "",
-  "license": "ISC"
+  "license": "MIT"
 }
